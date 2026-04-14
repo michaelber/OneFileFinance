@@ -1,0 +1,5 @@
+{
+  "name": "OneFileFinance",
+  "description": "A local-first, offline-ready personal finance manager with Excel-like editing and optional cloud sync.",
+  "requestFramePermissions": []
+}

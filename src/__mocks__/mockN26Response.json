@@ -1,0 +1,91 @@
+[
+  {
+    "id": "tx-1",
+    "amount": -15.50,
+    "currencyCode": "EUR",
+    "visibleTS": 1698765432000,
+    "merchantName": "REWE Supermarkt",
+    "category": "Groceries",
+    "type": "PT",
+    "referenceText": "Card payment"
+  },
+  {
+    "id": "tx-2",
+    "amount": 1500.00,
+    "currencyCode": "EUR",
+    "visibleTS": 1698654321000,
+    "partnerName": "Employer GmbH",
+    "category": "Salary",
+    "type": "CT",
+    "referenceText": "Salary October"
+  },
+  {
+    "id": "tx-3",
+    "amount": -50.00,
+    "currencyCode": "EUR",
+    "visibleTS": 1698543210000,
+    "merchantName": "ATM Sparkasse",
+    "type": "AA"
+  },
+  {
+    "id": "tx-4",
+    "amount": -9.99,
+    "currencyCode": "EUR",
+    "visibleTS": 1698432100000,
+    "partnerName": "Spotify AB",
+    "type": "DT",
+    "referenceText": "Spotify Premium"
+  },
+  {
+    "id": "tx-5",
+    "amount": 20.00,
+    "currencyCode": "EUR",
+    "visibleTS": 1698321000000,
+    "partnerName": "Max Mustermann",
+    "type": "ITP",
+    "referenceText": "Dinner split"
+  },
+  {
+    "id": "tx-6",
+    "amount": -100.00,
+    "currencyCode": "EUR",
+    "visibleTS": 1698210000000,
+    "partnerName": "Savings Account",
+    "type": "OTP",
+    "referenceText": "Monthly savings"
+  },
+  {
+    "id": "tx-7",
+    "amount": -4.50,
+    "currencyCode": "EUR",
+    "visibleTS": 1698100000000,
+    "merchantName": "Bakery",
+    "type": "PT"
+  },
+  {
+    "id": "tx-8",
+    "amount": -50.00,
+    "currencyCode": "EUR",
+    "visibleTS": 1698000000000,
+    "partnerName": "Vattenfall",
+    "type": "DT",
+    "referenceText": "Electricity"
+  },
+  {
+    "id": "tx-9",
+    "amount": -12.00,
+    "currencyCode": "EUR",
+    "visibleTS": 1697900000000,
+    "merchantName": "Netflix",
+    "type": "PT"
+  },
+  {
+    "id": "tx-10",
+    "amount": 5.00,
+    "currencyCode": "EUR",
+    "visibleTS": 1697800000000,
+    "partnerName": "Jane Doe",
+    "type": "CT",
+    "referenceText": "Coffee"
+  }
+]

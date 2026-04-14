@@ -1,0 +1,42 @@
+import React from 'react';
+import { 
+  Wallet, TrendingUp, Home, Briefcase, CreditCard, Banknote,
+  PieChart, Coins, Building, Landmark, ShoppingBag, Utensils, 
+  Car, Heart, Zap, Coffee, Smartphone, Music, Plane, Gift, 
+  GraduationCap, Shield, Hammer, DollarSign, ArrowUpRight, 
+  ArrowDownLeft, Tag, Train, Book, Laptop, Monitor
+} from 'lucide-react';
+
+export const ICON_MAP: Record<string, React.ReactNode> = {
+  'Wallet': <Wallet className="w-4 h-4" />,
+  'TrendingUp': <TrendingUp className="w-4 h-4" />,
+  'Home': <Home className="w-4 h-4" />,
+  'Briefcase': <Briefcase className="w-4 h-4" />,
+  'CreditCard': <CreditCard className="w-4 h-4" />,
+  'Banknote': <Banknote className="w-4 h-4" />,
+  'PieChart': <PieChart className="w-4 h-4" />,
+  'Coins': <Coins className="w-4 h-4" />,
+  'Building': <Building className="w-4 h-4" />,
+  'Landmark': <Landmark className="w-4 h-4" />,
+  'ShoppingBag': <ShoppingBag className="w-4 h-4" />,
+  'Utensils': <Utensils className="w-4 h-4" />,
+  'Car': <Car className="w-4 h-4" />,
+  'Heart': <Heart className="w-4 h-4" />,
+  'Zap': <Zap className="w-4 h-4" />,
+  'Coffee': <Coffee className="w-4 h-4" />,
+  'Smartphone': <Smartphone className="w-4 h-4" />,
+  'Music': <Music className="w-4 h-4" />,
+  'Plane': <Plane className="w-4 h-4" />,
+  'Gift': <Gift className="w-4 h-4" />,
+  'GraduationCap': <GraduationCap className="w-4 h-4" />,
+  'Shield': <Shield className="w-4 h-4" />,
+  'Hammer': <Hammer className="w-4 h-4" />,
+  'DollarSign': <DollarSign className="w-4 h-4" />,
+  'ArrowUpRight': <ArrowUpRight className="w-4 h-4" />,
+  'ArrowDownLeft': <ArrowDownLeft className="w-4 h-4" />,
+  'Tag': <Tag className="w-4 h-4" />,
+  'Train': <Train className="w-4 h-4" />,
+  'Book': <Book className="w-4 h-4" />,
+  'Laptop': <Laptop className="w-4 h-4" />,
+  'Monitor': <Monitor className="w-4 h-4" />,
+};
