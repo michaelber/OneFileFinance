@@ -201,6 +201,65 @@ function CustomSelect<T extends string | number>({
   );
 }
 
+function TextInput({ 
+  value, 
+  onChange, 
+  onBlur, 
+  onKeyDown, 
+  onPaste,
+  autoFocus, 
+  className,
+  inputRef,
+  placeholder
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  onBlur?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  onPaste?: (e: React.ClipboardEvent) => void;
+  autoFocus?: boolean;
+  className?: string;
+  inputRef?: React.RefObject<HTMLInputElement>;
+  placeholder?: string;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+    onBlur?.();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (['Enter', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      if (localValue !== value) {
+        onChange(localValue);
+      }
+    }
+    onKeyDown?.(e);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      autoFocus={autoFocus}
+      type="text"
+      className={className}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      onPaste={onPaste}
+      placeholder={placeholder}
+    />
+  );
+}
+
 function AccountTypeTable() {
   const types = useLiveQuery(() => db.account_types.toArray()) || [];
   const accounts = useLiveQuery(() => db.accounts.toArray()) || [];
@@ -395,13 +454,12 @@ function AccountTypeTable() {
                   onClick={() => handleCellClick(rowIndex, 0)}
                 >
                   {activeCell?.row === rowIndex && activeCell?.col === 0 ? (
-                    <input
-                      ref={inputRef}
+                    <TextInput
+                      inputRef={inputRef}
                       autoFocus
-                      type="text"
                       className="w-full bg-transparent border-none p-0 text-sm focus:outline-none dark:text-slate-100"
                       value={type.name}
-                      onChange={(e) => handleUpdate(type.id!, 'name', e.target.value)}
+                      onChange={(val) => handleUpdate(type.id!, 'name', val)}
                       onBlur={() => setActiveCell(null)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 0)}
                     />
@@ -812,13 +870,12 @@ const SortableAccountRow: React.FC<{
         onClick={() => handleCellClick(rowIndex, 0)}
       >
         {activeCell?.row === rowIndex && activeCell?.col === 0 ? (
-          <input
-            ref={inputRef}
+          <TextInput
+            inputRef={inputRef}
             autoFocus
-            type="text"
             className="w-full bg-transparent border-none p-0 text-sm focus:outline-none dark:text-slate-100"
             value={acc.name}
-            onChange={(e) => handleUpdate(acc.id!, 'name', e.target.value)}
+            onChange={(val) => handleUpdate(acc.id!, 'name', val)}
             onBlur={() => setActiveCell(null)}
             onKeyDown={(e) => handleKeyDown(e, rowIndex, 0)}
             onPaste={handlePaste}
@@ -1115,13 +1172,12 @@ function CategoryTable() {
                   onClick={() => handleCellClick(rowIndex, 0)}
                 >
                   {activeCell?.row === rowIndex && activeCell?.col === 0 ? (
-                    <input
-                      ref={inputRef}
+                    <TextInput
+                      inputRef={inputRef}
                       autoFocus
-                      type="text"
                       className="w-full bg-transparent border-none p-0 text-sm focus:outline-none dark:text-slate-100"
                       value={cat.name}
-                      onChange={(e) => handleUpdate(cat.id!, 'name', e.target.value)}
+                      onChange={(val) => handleUpdate(cat.id!, 'name', val)}
                       onBlur={() => setActiveCell(null)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 0)}
                       onPaste={handlePaste}
@@ -1666,14 +1722,13 @@ const SortableRuleRow: React.FC<{
         onClick={() => handleCellClick(rule.id!, 0)}
       >
         {activeCell?.id === rule.id && activeCell?.col === 0 ? (
-          <input
-            ref={inputRef}
+          <TextInput
+            inputRef={inputRef}
             autoFocus
-            type="text"
             className="w-full bg-transparent border-none p-0 text-sm focus:outline-none dark:text-slate-100"
             placeholder="Enter search value..."
             value={rule.search_value}
-            onChange={(e) => handleUpdate(rule.id!, 'search_value', e.target.value)}
+            onChange={(val) => handleUpdate(rule.id!, 'search_value', val)}
             onBlur={() => setActiveCell(null)}
             onKeyDown={(e) => handleKeyDown(e, rule.id!, 0)}
             onPaste={handlePaste}
