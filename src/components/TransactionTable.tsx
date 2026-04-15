@@ -701,6 +701,11 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
   const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(false);
   const [errorNotification, setErrorNotification] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(100);
+
+  useEffect(() => {
+    setVisibleCount(100);
+  }, [accountId]);
+
   const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
     description: '',
     amount: 0,
@@ -733,6 +738,10 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
   }) || [];
 
   const visibleTransactions = filteredTransactions.slice(0, visibleCount);
+
+  const displayedBalance = (searchQuery || showUncategorizedOnly)
+    ? filteredTransactions.reduce((sum, t) => sum + t.amount, 0)
+    : accountBalance;
 
   const formatCurrency = (amount: number) => {
     return formatAmount(amount, homeCurrency, numberFormat);
@@ -1185,14 +1194,14 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">Balance</span>
                 <span className={cn(
                   "text-lg font-bold leading-none",
-                  accountBalance < 0 ? "text-rose-600" : accountBalance > 0 ? "text-emerald-600" : "text-slate-900 dark:text-slate-100"
+                  displayedBalance < 0 ? "text-rose-600" : displayedBalance > 0 ? "text-emerald-600" : "text-slate-900 dark:text-slate-100"
                 )}>
-                  {formatCurrency(accountBalance)}
+                  {formatCurrency(displayedBalance)}
                 </span>
               </div>
 
-              {/* Aligned with Category column (w-40) */}
-              <div className="w-40 flex flex-col items-start px-4">
+              {/* Aligned with Category column (w-56) */}
+              <div className="w-56 flex flex-col items-start px-4">
                 {uncategorizedCount > 0 && (
                   <div 
                     className={cn(
@@ -1236,7 +1245,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
               <th className={cn("px-4 w-32", compactView ? "py-1.5" : "py-3")}>Date</th>
               <th className={cn("px-4", compactView ? "py-1.5" : "py-3")}>Description</th>
               <th className={cn("px-4 w-32 text-right", compactView ? "py-1.5" : "py-3")}>Amount</th>
-              <th className={cn("px-4 w-40", compactView ? "py-1.5" : "py-3")}>Category</th>
+              <th className={cn("px-4 w-56", compactView ? "py-1.5" : "py-3")}>Category</th>
               <th className={cn("px-4 w-40", compactView ? "py-1.5" : "py-3")}>Account</th>
               <th className={cn("px-4 w-16 text-center", compactView ? "py-1.5" : "py-3")}></th>
             </tr>
@@ -1449,17 +1458,17 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
             ))}
           </tbody>
         </table>
+        {visibleCount < filteredTransactions.length && (
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-slate-50 dark:bg-slate-900/50 rounded-b-xl">
+            <button
+              onClick={() => setVisibleCount(prev => prev + 100)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+            >
+              Load more transactions ({visibleCount} of {filteredTransactions.length})
+            </button>
+          </div>
+        )}
       </div>
-      {visibleCount < filteredTransactions.length && (
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-slate-50 dark:bg-slate-900/50 rounded-b-xl">
-          <button
-            onClick={() => setVisibleCount(prev => prev + 100)}
-            className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
-          >
-            Load more transactions ({visibleCount} of {filteredTransactions.length})
-          </button>
-        </div>
-      )}
     </div>
   );
 }

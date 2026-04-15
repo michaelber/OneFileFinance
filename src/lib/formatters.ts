@@ -1,6 +1,6 @@
 import { isValid, parseISO, format } from 'date-fns';
 
-export const formatAmount = (amount: number, currency: string, numberFormat: string) => {
+export const formatAmount = (amount: number, currency: string, numberFormat: string, decimals: number = 2) => {
   const currencyCode = currency === '€' ? 'EUR' : currency === '$' ? 'USD' : currency === '£' ? 'GBP' : currency === '¥' ? 'JPY' : currency === 'CHF' ? 'CHF' : 'EUR';
   
   if (numberFormat === 'space-comma') {
@@ -8,16 +8,16 @@ export const formatAmount = (amount: number, currency: string, numberFormat: str
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
       currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
     }).format(amount).replace('EUR', '€').replace('USD', '$');
   } else {
     // Default: $1,000.00
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
     }).format(amount).replace('EUR', '€').replace('USD', '$');
   }
 };

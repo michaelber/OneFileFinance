@@ -39,4 +39,6 @@ export const ICON_MAP: Record<string, React.ReactNode> = {
   'Book': <Book className="w-4 h-4" />,
   'Laptop': <Laptop className="w-4 h-4" />,
   'Monitor': <Monitor className="w-4 h-4" />,
+  'CapitalGains': <TrendingUp className="w-4 h-4 text-blue-500" />,
+  'SeverancePay': <Briefcase className="w-4 h-4 text-blue-500" />,
 };
