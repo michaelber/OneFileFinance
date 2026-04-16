@@ -41,20 +41,17 @@ export const calculateExpenses = (transactions: Transaction[]): number => {
     .reduce((sum, total) => sum + total, 0);
 };
 
-export const calculateIncome = (transactions: Transaction[], accounts?: Account[], accountTypes?: AccountType[]): number => {
+export const calculateIncome = (transactions: Transaction[], categories?: Category[]): number => {
   let validTransactions = transactions;
   
-  if (accounts && accountTypes) {
+  if (categories) {
     const todayStr = new Date().toISOString().split('T')[0];
-    const excludedAccountIds = new Set(
-      accounts.filter(acc => {
-        const type = accountTypes.find(t => t.id === acc.account_type_id);
-        return type && (type.icon === 'CapitalGains' || type.icon === 'SeverancePay');
-      }).map(acc => acc.id)
+    const excludedCategoryIds = new Set(
+      categories.filter(cat => cat.icon === 'CapitalGains' || cat.icon === 'SeverancePay').map(cat => cat.id)
     );
 
     validTransactions = transactions.filter(t => {
-      if (excludedAccountIds.has(t.account_id) && t.date > todayStr) {
+      if (t.category_id && excludedCategoryIds.has(t.category_id) && t.date > todayStr) {
         return false;
       }
       return true;
@@ -72,25 +69,22 @@ export const calculateIncome = (transactions: Transaction[], accounts?: Account[
     .reduce((sum, total) => sum + total, 0);
 };
 
-export const calculateSavingsRate = (transactions: Transaction[], accounts?: Account[], accountTypes?: AccountType[]): number | null => {
+export const calculateSavingsRate = (transactions: Transaction[], categories?: Category[]): number | null => {
   const expenses = calculateExpenses(transactions);
-  const income = calculateIncome(transactions, accounts, accountTypes);
+  const income = calculateIncome(transactions, categories);
   
   if (expenses === 0 || income === 0) return null;
   
   return 1 - (-expenses / income);
 };
 
-export const calculateCapitalGains = (transactions: Transaction[], accounts: Account[], accountTypes: AccountType[]): number => {
-  const capitalGainsAccountIds = new Set(
-    accounts.filter(acc => {
-      const type = accountTypes.find(t => t.id === acc.account_type_id);
-      return type && type.icon === 'CapitalGains';
-    }).map(acc => acc.id)
+export const calculateCapitalGains = (transactions: Transaction[], categories: Category[]): number => {
+  const capitalGainsCategoryIds = new Set(
+    categories.filter(cat => cat.icon === 'CapitalGains').map(cat => cat.id)
   );
   
   return transactions
-    .filter(t => capitalGainsAccountIds.has(t.account_id))
+    .filter(t => t.category_id && capitalGainsCategoryIds.has(t.category_id))
     .reduce((sum, t) => sum + t.amount, 0);
 };
 

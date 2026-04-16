@@ -40,10 +40,10 @@ export function ReportingView() {
       netWorth12M: calculateNetWorth12M(transactions),
       monthlyAverage: calculateMonthlyAverage(transactions),
       yearlyAverage: calculateYearlyAverage(transactions),
-      savingsRate: calculateSavingsRate(transactions, accounts, accountTypes),
+      savingsRate: calculateSavingsRate(transactions, categories),
       financialFreedomYears: calculateFinancialFreedomYears(transactions)
     };
-  }, [transactions, accounts, accountTypes]);
+  }, [transactions, categories]);
 
   if (!metrics) return <div className="p-8">Loading...</div>;
 
@@ -92,8 +92,7 @@ export function ReportingView() {
       {activeTab === 'savingsRate' && (
         <SavingsRateTab 
           transactions={transactions} 
-          accounts={accounts} 
-          accountTypes={accountTypes} 
+          categories={categories} 
           metrics={metrics} 
           formatRoundedAmount={formatRoundedAmount} 
           compactView={compactView} 
@@ -105,6 +104,7 @@ export function ReportingView() {
           transactions={transactions} 
           accounts={accounts} 
           accountTypes={accountTypes} 
+          categories={categories}
           formatRoundedAmount={formatRoundedAmount} 
           compactView={compactView} 
         />

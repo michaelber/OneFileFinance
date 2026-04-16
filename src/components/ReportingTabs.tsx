@@ -86,23 +86,20 @@ export function NetWorthTab({ transactions, metrics, formatRoundedAmount }: any)
   );
 }
 
-export function SavingsRateTab({ transactions, accounts, accountTypes, metrics, formatRoundedAmount, compactView }: any) {
+export function SavingsRateTab({ transactions, categories, metrics, formatRoundedAmount, compactView }: any) {
   const [expandedSavingsYears, setExpandedSavingsYears] = useState<Record<string, boolean>>({});
 
   const incomeExpenseData = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
     
     let validTxs = transactions;
-    if (accounts && accountTypes) {
+    if (categories) {
       const todayStr = new Date().toISOString().split('T')[0];
-      const excludedAccountIds = new Set(
-        accounts.filter((acc: any) => {
-          const type = accountTypes.find((t: any) => t.id === acc.account_type_id);
-          return type && (type.icon === 'CapitalGains' || type.icon === 'SeverancePay');
-        }).map((acc: any) => acc.id)
+      const excludedCategoryIds = new Set(
+        categories.filter((cat: any) => cat.icon === 'CapitalGains' || cat.icon === 'SeverancePay').map((cat: any) => cat.id)
       );
       validTxs = transactions.filter((t: any) => {
-        if (excludedAccountIds.has(t.account_id) && t.date > todayStr) {
+        if (t.category_id && excludedCategoryIds.has(t.category_id) && t.date > todayStr) {
           return false;
         }
         return true;
@@ -167,7 +164,7 @@ export function SavingsRateTab({ transactions, accounts, accountTypes, metrics, 
     });
     
     return data;
-  }, [transactions, expandedSavingsYears, accounts, accountTypes]);
+  }, [transactions, expandedSavingsYears, categories]);
 
   return (
     <>
@@ -288,7 +285,7 @@ export function SavingsRateTab({ transactions, accounts, accountTypes, metrics, 
   );
 }
 
-export function AccountsTab({ transactions, accounts, accountTypes, formatRoundedAmount, compactView }: any) {
+export function AccountsTab({ transactions, accounts, accountTypes, categories, formatRoundedAmount, compactView }: any) {
   const accountDistributionData = useMemo(() => {
     if (!transactions || !accounts) return [];
     
@@ -358,7 +355,7 @@ export function AccountsTab({ transactions, accounts, accountTypes, formatRounde
       .map((acc: any) => {
       const accTxs = transactions.filter((t: any) => t.account_id === acc.id);
       const amount = accTxs.reduce((sum: number, t: any) => sum + t.amount, 0);
-      const capitalGains = calculateCapitalGains(accTxs, accounts, accountTypes || []);
+      const capitalGains = calculateCapitalGains(accTxs, categories || []);
       return { id: acc.id, name: acc.name, amount, capitalGains };
     }).filter((row: any) => row.amount !== 0);
     
@@ -370,7 +367,7 @@ export function AccountsTab({ transactions, accounts, accountTypes, formatRounde
       .sort((a: any, b: any) => b.amount - a.amount);
       
     return { rows: sortedRows, total, totalCapitalGains };
-  }, [transactions, accounts, accountTypes]);
+  }, [transactions, accounts, accountTypes, categories]);
 
   return (
     <div className="space-y-8">

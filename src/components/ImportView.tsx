@@ -66,6 +66,7 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
   }, []);
 
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([]);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'valid' | 'invalid' | 'duplicate'>('all');
 
   const accounts = useLiveQuery(() => db.accounts.toArray());
   const categories = useLiveQuery(() => db.categories.toArray());
@@ -532,28 +533,60 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
         {step === 'preview' && (
           <div className="space-y-6">
             <div className="grid grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+              <button 
+                onClick={() => setFilterStatus('all')}
+                className={cn(
+                  "p-4 rounded-xl border text-left transition-all",
+                  filterStatus === 'all' 
+                    ? "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 shadow-sm ring-1 ring-slate-300 dark:ring-slate-600" 
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 opacity-70 hover:opacity-100"
+                )}
+              >
                 <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Total Rows</div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{processedRows.length}</div>
-              </div>
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-200 dark:border-emerald-800/30">
+              </button>
+              <button 
+                onClick={() => setFilterStatus('valid')}
+                className={cn(
+                  "p-4 rounded-xl border text-left transition-all",
+                  filterStatus === 'valid'
+                    ? "bg-emerald-50 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-700"
+                    : "bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/30 hover:border-emerald-300 dark:hover:border-emerald-700 opacity-70 hover:opacity-100"
+                )}
+              >
                 <div className="text-sm text-emerald-600 dark:text-emerald-400 mb-1">Valid (To Import)</div>
                 <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
                   {processedRows.filter(r => r.status === 'valid').length}
                 </div>
-              </div>
-              <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800/30">
+              </button>
+              <button 
+                onClick={() => setFilterStatus('duplicate')}
+                className={cn(
+                  "p-4 rounded-xl border text-left transition-all",
+                  filterStatus === 'duplicate'
+                    ? "bg-amber-50 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 shadow-sm ring-1 ring-amber-300 dark:ring-amber-700"
+                    : "bg-amber-50/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/30 hover:border-amber-300 dark:hover:border-amber-700 opacity-70 hover:opacity-100"
+                )}
+              >
                 <div className="text-sm text-amber-600 dark:text-amber-400 mb-1">Duplicates (Skipped)</div>
                 <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">
                   {processedRows.filter(r => r.status === 'duplicate').length}
                 </div>
-              </div>
-              <div className="bg-rose-50 dark:bg-rose-900/20 p-4 rounded-xl border border-rose-200 dark:border-rose-800/30">
+              </button>
+              <button 
+                onClick={() => setFilterStatus('invalid')}
+                className={cn(
+                  "p-4 rounded-xl border text-left transition-all",
+                  filterStatus === 'invalid'
+                    ? "bg-rose-50 dark:bg-rose-900/40 border-rose-300 dark:border-rose-700 shadow-sm ring-1 ring-rose-300 dark:ring-rose-700"
+                    : "bg-rose-50/50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800/30 hover:border-rose-300 dark:hover:border-rose-700 opacity-70 hover:opacity-100"
+                )}
+              >
                 <div className="text-sm text-rose-600 dark:text-rose-400 mb-1">Invalid (Rejected)</div>
                 <div className="text-2xl font-bold text-rose-700 dark:text-rose-300">
                   {processedRows.filter(r => r.status === 'invalid').length}
                 </div>
-              </div>
+              </button>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -589,7 +622,10 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                    {processedRows.slice(0, 100).map((row, i) => (
+                    {processedRows
+                      .filter(r => filterStatus === 'all' || r.status === filterStatus)
+                      .slice(0, 100)
+                      .map((row, i) => (
                       <tr key={i} className={cn(
                         "hover:bg-slate-50 dark:hover:bg-slate-800/50",
                         row.status === 'duplicate' && "bg-amber-50/50 dark:bg-amber-900/10",

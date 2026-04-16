@@ -1240,6 +1240,10 @@ function CategoryRuleTable() {
   const prevActiveCellRef = useRef<{ id: number; col: number } | null>(null);
   const prevActiveRowIdRef = useRef<number | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  
+  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
+  const [bulkAddText, setBulkAddText] = useState('');
+  const [bulkAddCategory, setBulkAddCategory] = useState<number | ''>('');
 
   const toggleCategory = (catId: number) => {
     setExpandedCategories(prev => {
@@ -1527,8 +1531,103 @@ function CategoryRuleTable() {
     setActiveCell(null);
   };
 
+  const handleBulkAdd = async () => {
+    setError(null);
+    const lines = bulkAddText.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+    if (lines.length === 0) {
+      setError('Please enter at least one search value');
+      return;
+    }
+    if (bulkAddCategory === '') {
+      setError('Please select a category');
+      return;
+    }
+
+    try {
+      for (const val of lines) {
+        await db.category_rules.add({
+          search_value: val,
+          category_id: Number(bulkAddCategory),
+          priority: rules.length,
+          updated_at: Date.now()
+        });
+      }
+      setExpandedCategories(prev => new Set(prev).add(Number(bulkAddCategory)));
+      setIsBulkAddOpen(false);
+      setBulkAddText('');
+      setBulkAddCategory('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to bulk add rules');
+    }
+  };
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+      {isBulkAddOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-fade-in">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsBulkAddOpen(false)} />
+          <div className="relative bg-white dark:bg-slate-900 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-full border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+              <div className="flex items-center gap-2">
+                <Plus className="w-5 h-5 text-blue-500" />
+                <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Bulk Add Rules</h2>
+              </div>
+              <button 
+                onClick={() => setIsBulkAddOpen(false)}
+                className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Category to Assign</label>
+                <select
+                  value={bulkAddCategory}
+                  onChange={(e) => setBulkAddCategory(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm px-3 py-2"
+                >
+                  <option value="" disabled>Select a category...</option>
+                  <option value={0}>Uncategorized</option>
+                  {categories.map((cat: any) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Search Values (One per line)</label>
+                <textarea
+                  value={bulkAddText}
+                  onChange={(e) => setBulkAddText(e.target.value)}
+                  placeholder="e.g.&#10;ALDI&#10;Burger King&#10;Netflix..."
+                  rows={8}
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-sm p-3 resize-y"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex justify-end gap-3 rounded-b-xl shrink-0">
+              <button
+                onClick={() => setIsBulkAddOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkAdd}
+                disabled={!bulkAddText.trim() || bulkAddCategory === ''}
+                className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed border-transparent"
+              >
+                Add Rules
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between rounded-t-xl relative">
         {error && (
           <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 animate-bounce">
@@ -1543,11 +1642,11 @@ function CategoryRuleTable() {
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Auto-Categorization Rules</h3>
         </div>
         <button 
-          onClick={handleAdd} 
+          onClick={() => setIsBulkAddOpen(true)} 
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg text-xs font-bold transition-colors shadow-sm border border-blue-100 dark:border-blue-800/50"
         >
           <Plus className="w-3.5 h-3.5" />
-          Add Rule
+          Bulk Add Rules
         </button>
       </div>
       <div className="">
