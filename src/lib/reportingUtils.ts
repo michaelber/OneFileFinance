@@ -105,10 +105,14 @@ export const calculateNetWorthYTD = (transactions: Transaction[]): number => {
 };
 
 export const calculateNetWorth12M = (transactions: Transaction[]): number => {
-  const oneYearAgo = subDays(new Date(), 365);
+  const today = new Date();
+  const oneYearAgo = subDays(today, 365);
   
   return transactions
-    .filter(t => parseISO(t.date) >= oneYearAgo)
+    .filter(t => {
+      const date = parseISO(t.date);
+      return date >= oneYearAgo && date <= today;
+    })
     .reduce((sum, t) => sum + t.amount, 0);
 };
 

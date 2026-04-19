@@ -1885,7 +1885,17 @@ const SortableRuleRow: React.FC<{
   );
 }
 
-export function SettingsView() {
+export function SettingsView({ 
+  currentFilePath, 
+  onOpen, 
+  onSave, 
+  onSaveAs 
+}: { 
+  currentFilePath?: string | null, 
+  onOpen?: () => void, 
+  onSave?: () => void, 
+  onSaveAs?: () => void 
+} = {}) {
   const [activeTab, setActiveTab] = useState<'accounts' | 'categories' | 'automation' | 'ui' | 'data'>('accounts');
   const accountTypes = useLiveQuery(() => db.account_types.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.toArray());
@@ -2266,20 +2276,56 @@ export function SettingsView() {
                     This ensures your privacy and works offline. However, clearing your browser data 
                     may delete your records. We recommend regular backups.
                   </p>
-                    <div className="flex gap-3">
-                      <button 
-                        onClick={handleBackup}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm"
-                      >
-                        <Download className="w-4 h-4" />
-                        Export Backup
-                      </button>
-                    <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-sm">
-                      <Upload className="w-4 h-4" />
-                      Import Data
-                      <input type="file" accept=".json" className="hidden" onChange={handleRestore} />
-                    </label>
-                  </div>
+                    <div className="flex gap-3 mt-4">
+                      {window.__TAURI_INTERNALS__ ? (
+                        <div className="w-full space-y-4">
+                          <div className="flex items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                            <span className="text-sm text-slate-500 mr-2">Current LogicFile:</span>
+                            <span className="text-sm font-mono text-slate-900 dark:text-slate-100 truncate flex-1">
+                              {currentFilePath || 'Unsaved'}
+                            </span>
+                          </div>
+                          <div className="flex gap-3">
+                            <button 
+                              onClick={onOpen}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                            >
+                              <Upload className="w-4 h-4" />
+                              Open
+                            </button>
+                            <button 
+                              onClick={onSave}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+                            >
+                              <Download className="w-4 h-4" />
+                              Save
+                            </button>
+                            <button 
+                              onClick={onSaveAs}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                            >
+                              <Download className="w-4 h-4" />
+                              Save As
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={handleBackup}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+                          >
+                            <Download className="w-4 h-4" />
+                            Export Backup
+                          </button>
+                          <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-sm">
+                            <Upload className="w-4 h-4" />
+                            Import Data
+                            <input type="file" accept=".json" className="hidden" onChange={handleRestore} />
+                          </label>
+                        </>
+                      )}
+                    </div>
                   {successMessage && (
                     <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl animate-fade-in">
                       <p className="text-sm text-emerald-800 dark:text-emerald-400 font-medium flex items-center gap-2">

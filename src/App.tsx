@@ -8,14 +8,83 @@ import { ReportingView } from './components/ReportingView';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import { format } from 'date-fns';
-import { TrendingUp, TrendingDown, Wallet, PieChart } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, PieChart, Save } from 'lucide-react';
 import { cn } from './lib/utils';
 import { processRecurringTransactions } from './services/recurringService';
+import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile } from './lib/fileHandling';
+import { StatusBar } from './components/StatusBar';
 
 export default function App() {
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>();
   const [view, setView] = useState<'dashboard' | 'settings' | 'recurring' | 'import' | 'reporting'>('dashboard');
   const [newTransactionIds, setNewTransactionIds] = useState<number[]>([]);
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [addedRecurringCount, setAddedRecurringCount] = useState(0);
+  const [importedCount, setImportedCount] = useState(0);
+
+  // Tauri shortcuts & tracking
+  React.useEffect(() => {
+    if (!(window as any).__TAURI_INTERNALS__) return;
+    
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    
+    // Mark as unsaved on any dexie change if we have an open file
+    // Simple way is to just assume changes happen. For now we will rely on explicit user actions to mark unsaved.
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentFilePath]);
+
+  const handleSave = async () => {
+    if (!(window as any).__TAURI_INTERNALS__) return;
+    setSaveStatus('saving');
+    try {
+      const path = await saveDatabaseToFile(currentFilePath);
+      if (path) {
+        setCurrentFilePath(path);
+        setSaveStatus('saved');
+      } else {
+        setSaveStatus('unsaved');
+      }
+    } catch(err) {
+      console.error("Save failed", err);
+      setSaveStatus('unsaved');
+    }
+  };
+
+  const handleSaveAs = async () => {
+    setSaveStatus('saving');
+    try {
+      const path = await promptSaveAsDatabase();
+      if (path) {
+        setCurrentFilePath(path);
+        setSaveStatus('saved');
+      } else {
+        setSaveStatus('unsaved');
+      }
+    } catch(err) {
+      console.error("Save failed", err);
+      setSaveStatus('unsaved');
+    }
+  };
+
+  const handleOpen = async () => {
+    try {
+      const path = await openDatabaseFromFile();
+      if (path) {
+        setCurrentFilePath(path);
+        setSaveStatus('saved');
+      }
+    } catch(err) {
+      console.error("Open failed", err);
+    }
+  };
 
   React.useEffect(() => {
     if (view !== 'dashboard') {
@@ -35,8 +104,22 @@ export default function App() {
       const accentColor = settings.find(s => s.key === 'accentColor')?.value || '#2563eb';
       const topBarColor = settings.find(s => s.key === 'topBarColor')?.value || '#ffffff';
       const darkMode = settings.find(s => s.key === 'darkMode')?.value || false;
+
+      // Ensure appropriate text contrast for the statusbar
+      const hexToRgb = (hex: string) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : { r: 255, g: 255, b: 255 };
+      };
+      const { r, g, b } = hexToRgb(topBarColor);
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const textColor = luminance > 0.5 ? '#1e293b' : '#f8fafc';
       
       document.documentElement.style.setProperty('--accent-color', accentColor);
+      document.documentElement.style.setProperty('--top-bar-text-color', textColor);
       
       if (darkMode) {
         document.documentElement.classList.add('dark');
@@ -144,6 +227,7 @@ export default function App() {
       const ids = await processRecurringTransactions(true);
       if (ids.length > 0) {
         setNewTransactionIds(ids);
+        setAddedRecurringCount(ids.length);
       }
 
       const typeCount = await db.account_types.count();
@@ -249,7 +333,12 @@ export default function App() {
               </button>
             </header>
             <div className="max-w-7xl mx-auto">
-              <SettingsView />
+              <SettingsView 
+                currentFilePath={currentFilePath}
+                onOpen={handleOpen}
+                onSave={handleSave}
+                onSaveAs={handleSaveAs}
+              />
             </div>
           </div>
         )}
@@ -261,6 +350,7 @@ export default function App() {
             onImportComplete={(accountId, importedIds) => {
               setSelectedAccountId(accountId);
               setNewTransactionIds(importedIds);
+              setImportedCount(importedIds.length);
               setView('dashboard');
             }}
           />
@@ -272,6 +362,14 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <StatusBar 
+        currentFilePath={currentFilePath}
+        saveStatus={saveStatus}
+        onSave={handleSave}
+        addedRecurringCount={addedRecurringCount}
+        importedCount={importedCount}
+      />
     </div>
   );
 }

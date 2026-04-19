@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, ComposedChart, Legend, PieChart, Pie, Cell
 } from 'recharts';
 import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
+import * as Icons from 'lucide-react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { calculateCapitalGains } from '../lib/reportingUtils';
@@ -28,6 +29,7 @@ export function NetWorthTab({ transactions, metrics, formatRoundedAmount }: any)
     let maxDateStr = '0000-00-00';
 
     transactions.forEach((t: any) => {
+      if (!t.date) return;
       const monthKey = t.date.substring(0, 7);
       monthlyTotals[monthKey] = (monthlyTotals[monthKey] || 0) + t.amount;
       if (t.date < minDateStr) minDateStr = t.date;
@@ -106,23 +108,40 @@ export function SavingsRateTab({ transactions, categories, metrics, formatRounde
       });
     }
 
+    const yearlyCategoryTotals: Record<number, Record<number, number>> = {};
+    const monthlyCategoryTotals: Record<string, Record<number, number>> = {};
+
+    validTxs.forEach((t: any) => {
+      if (!t.date) return;
+      const year = parseInt(t.date.substring(0, 4), 10);
+      const monthKey = t.date.substring(0, 7);
+      const catId = t.category_id || 0;
+      
+      if (!yearlyCategoryTotals[year]) yearlyCategoryTotals[year] = {};
+      if (!monthlyCategoryTotals[monthKey]) monthlyCategoryTotals[monthKey] = {};
+
+      yearlyCategoryTotals[year][catId] = (yearlyCategoryTotals[year][catId] || 0) + t.amount;
+      monthlyCategoryTotals[monthKey][catId] = (monthlyCategoryTotals[monthKey][catId] || 0) + t.amount;
+    });
+
     const yearlyTotals: Record<number, { income: number, expenses: number }> = {};
     const monthlyTotals: Record<string, { income: number, expenses: number }> = {};
 
-    validTxs.forEach((t: any) => {
-      const year = parseInt(t.date.substring(0, 4), 10);
-      const monthKey = t.date.substring(0, 7);
-      
-      if (!yearlyTotals[year]) yearlyTotals[year] = { income: 0, expenses: 0 };
-      if (!monthlyTotals[monthKey]) monthlyTotals[monthKey] = { income: 0, expenses: 0 };
+    Object.entries(yearlyCategoryTotals).forEach(([yearStr, cats]) => {
+      const year = parseInt(yearStr, 10);
+      yearlyTotals[year] = { income: 0, expenses: 0 };
+      Object.values(cats).forEach(amount => {
+        if (amount > 0) yearlyTotals[year].income += amount;
+        else if (amount < 0) yearlyTotals[year].expenses += amount;
+      });
+    });
 
-      if (t.amount > 0) {
-        yearlyTotals[year].income += t.amount;
-        monthlyTotals[monthKey].income += t.amount;
-      } else if (t.amount < 0) {
-        yearlyTotals[year].expenses += t.amount;
-        monthlyTotals[monthKey].expenses += t.amount;
-      }
+    Object.entries(monthlyCategoryTotals).forEach(([monthKey, cats]) => {
+      monthlyTotals[monthKey] = { income: 0, expenses: 0 };
+      Object.values(cats).forEach(amount => {
+        if (amount > 0) monthlyTotals[monthKey].income += amount;
+        else if (amount < 0) monthlyTotals[monthKey].expenses += amount;
+      });
     });
 
     const years = Object.keys(yearlyTotals).map(Number).sort((a, b) => b - a);
@@ -299,7 +318,7 @@ export function AccountsTab({ transactions, accounts, accountTypes, categories, 
     }).filter((a: any) => a.rawBalance !== 0 && a.value > 0);
     
     const total = balances.reduce((sum: number, a: any) => sum + a.value, 0);
-    const threshold = total * 0.1;
+    const threshold = total * 0.05;
     
     let otherValue = 0;
     const filteredBalances = balances.filter((a: any) => {
@@ -329,7 +348,7 @@ export function AccountsTab({ transactions, accounts, accountTypes, categories, 
     }).filter((t: any) => t.value > 0);
     
     const total = balancesByType.reduce((sum: number, t: any) => sum + t.value, 0);
-    const threshold = total * 0.1;
+    const threshold = total * 0.05;
     
     let otherValue = 0;
     const filteredBalances = balancesByType.filter((t: any) => {
@@ -356,7 +375,8 @@ export function AccountsTab({ transactions, accounts, accountTypes, categories, 
       const accTxs = transactions.filter((t: any) => t.account_id === acc.id);
       const amount = accTxs.reduce((sum: number, t: any) => sum + t.amount, 0);
       const capitalGains = calculateCapitalGains(accTxs, categories || []);
-      return { id: acc.id, name: acc.name, amount, capitalGains };
+      const accType = accountTypes?.find((at: any) => at.id === acc.account_type_id);
+      return { id: acc.id, name: acc.name, icon: accType?.icon, amount, capitalGains };
     }).filter((row: any) => row.amount !== 0);
     
     const total = rows.reduce((sum: number, r: any) => sum + r.amount, 0);
@@ -386,12 +406,15 @@ export function AccountsTab({ transactions, accounts, accountTypes, categories, 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {accountTableData.rows.map((row: any) => (
+              {accountTableData.rows.map((row: any) => {
+                const IconComponent = row.icon ? (Icons as any)[row.icon] : null;
+                return (
                 <tr 
                   key={row.id} 
                   className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
                 >
-                  <td className={cn("px-6 font-medium text-slate-900 dark:text-slate-100", compactView ? "py-1" : "py-4")}>
+                  <td className={cn("px-6 font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2", compactView ? "py-1" : "py-4")}>
+                    {IconComponent && <IconComponent className="w-4 h-4 text-slate-500" />}
                     {row.name}
                   </td>
                   <td className={cn("px-6 text-right font-medium", compactView ? "py-1" : "py-4", row.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
@@ -404,7 +427,7 @@ export function AccountsTab({ transactions, accounts, accountTypes, categories, 
                     {formatRoundedAmount(row.capitalGains)}
                   </td>
                 </tr>
-              ))}
+              )})}
               <tr className="bg-slate-50 dark:bg-slate-950 font-semibold">
                 <td className={cn("px-6 text-slate-900 dark:text-slate-100", compactView ? "py-1" : "py-4")}>Total</td>
                 <td className={cn("px-6 text-right", compactView ? "py-1" : "py-4", accountTableData.total < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
@@ -492,14 +515,22 @@ export function AccountsTab({ transactions, accounts, accountTypes, categories, 
   );
 }
 
-export function CategoriesTab({ transactions, categories, formatRoundedAmount, compactView }: any) {
+export function CategoriesTab({ transactions, categories, accounts, formatRoundedAmount, compactView, onCellClick }: any) {
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
   const [visibleYearsCount, setVisibleYearsCount] = useState<number | 'All'>(9);
 
   const toggleCategory = (catId: string) => {
     setExpandedCategories(prev => ({
       ...prev,
       [catId]: !prev[catId]
+    }));
+  };
+
+  const toggleYear = (year: number) => {
+    setExpandedYears(prev => ({
+      ...prev,
+      [year]: !prev[year]
     }));
   };
 
@@ -510,6 +541,7 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
     const yearsSet = new Set<number>();
     
     transactions.forEach((t: any) => {
+      if (!t.date) return;
       const year = parseInt(t.date.substring(0, 4), 10);
       yearsSet.add(year);
     });
@@ -517,7 +549,7 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
     const months = Array.from({ length: 12 }, (_, i) => i);
 
     categories.forEach((cat: any) => {
-      data[cat.id!] = { name: cat.name, total: 0, years: {} };
+      data[cat.id!] = { name: cat.name, total: 0, years: {}, accounts: {} };
       years.forEach(year => {
         data[cat.id!].years[year] = { total: 0, months: {} };
         months.forEach(month => {
@@ -526,7 +558,7 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
       });
     });
 
-    data['uncategorized'] = { name: 'Uncategorized', total: 0, years: {} };
+    data['uncategorized'] = { name: 'Uncategorized', total: 0, years: {}, accounts: {} };
     years.forEach(year => {
       data['uncategorized'].years[year] = { total: 0, months: {} };
       months.forEach(month => {
@@ -535,14 +567,30 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
     });
 
     transactions.forEach((t: any) => {
+      if (!t.date) return;
       const year = parseInt(t.date.substring(0, 4), 10);
       const month = parseInt(t.date.substring(5, 7), 10) - 1;
       const catId = t.category_id || 'uncategorized';
+      const accId = t.account_id || 'unassigned';
 
       if (data[catId]) {
         data[catId].total += t.amount;
         data[catId].years[year].total += t.amount;
         data[catId].years[year].months[month] += t.amount;
+
+        if (!data[catId].accounts[accId]) {
+          data[catId].accounts[accId] = { total: 0, years: {} };
+          years.forEach(y => {
+            data[catId].accounts[accId].years[y] = { total: 0, months: {} };
+            months.forEach(m => {
+              data[catId].accounts[accId].years[y].months[m] = 0;
+            });
+          });
+        }
+        
+        data[catId].accounts[accId].total += t.amount;
+        data[catId].accounts[accId].years[year].total += t.amount;
+        data[catId].accounts[accId].years[year].months[month] += t.amount;
       }
     });
 
@@ -552,8 +600,14 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
 
     const grandTotal = filteredData.reduce((sum, [_, catData]) => sum + catData.total, 0);
     const yearTotals: Record<number, number> = {};
+    const yearMonthTotals: Record<number, Record<number, number>> = {};
+    
     years.forEach(year => {
       yearTotals[year] = filteredData.reduce((sum, [_, catData]) => sum + catData.years[year].total, 0);
+      yearMonthTotals[year] = {};
+      months.forEach(month => {
+        yearMonthTotals[year][month] = filteredData.reduce((sum, [_, catData]) => sum + catData.years[year].months[month], 0);
+      });
     });
 
     let maxAbsValue = Math.abs(grandTotal);
@@ -567,7 +621,7 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
       });
     });
 
-    return { years, months, data: filteredData, grandTotal, yearTotals, maxAbsValue };
+    return { years, months, data: filteredData, grandTotal, yearTotals, yearMonthTotals, maxAbsValue };
   }, [transactions, categories]);
 
   const displayedYears = useMemo(() => {
@@ -611,59 +665,96 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
               <th className={cn("px-6 font-medium", compactView ? "py-1.5" : "py-3")}>Category</th>
               <th className={cn("px-6 font-medium text-right", compactView ? "py-1.5" : "py-3")}>Total</th>
               {displayedYears.map(year => (
-                <th key={year} className={cn("px-6 font-medium text-right", compactView ? "py-1.5" : "py-3")}>{year}</th>
+                <React.Fragment key={year}>
+                  <th 
+                    className={cn("px-6 font-medium text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors", compactView ? "py-1.5" : "py-3")}
+                    onClick={() => toggleYear(year)}
+                  >
+                    {year} {expandedYears[year] ? <ChevronDown className="w-3 h-3 inline-block" /> : <ChevronRight className="w-3 h-3 inline-block" />}
+                  </th>
+                  {expandedYears[year] && pivotData.months.map(month => (
+                    <th key={`${year}-${month}`} className={cn("px-4 font-medium text-right text-xs text-slate-400", compactView ? "py-1.5" : "py-3")}>
+                      {format(new Date(year, month), 'MMM')}
+                    </th>
+                  ))}
+                </React.Fragment>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {pivotData.data.map(([catId, catData]) => (
               <React.Fragment key={catId}>
-                <tr 
-                  className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                  onClick={() => toggleCategory(catId)}
-                >
-                  <td className={cn("px-6 font-medium text-slate-900 dark:text-slate-100 flex items-center", compactView ? "py-1" : "py-4")}>
+                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <td 
+                    className={cn("px-6 font-medium text-slate-900 dark:text-slate-100 flex items-center cursor-pointer", compactView ? "py-1" : "py-4")}
+                    onClick={() => toggleCategory(catId)}
+                  >
                     {expandedCategories[catId] ? <ChevronDown className="w-4 h-4 mr-2 text-slate-400" /> : <ChevronRight className="w-4 h-4 mr-2 text-slate-400" />}
                     {catData.name}
                   </td>
                   <td 
-                    className={cn("px-6 text-right font-medium text-slate-900 dark:text-slate-100", compactView ? "py-1" : "py-4")}
+                    className={cn("px-6 text-right font-medium text-slate-900 dark:text-slate-100 cursor-pointer hover:opacity-80", compactView ? "py-1" : "py-4")}
                     style={{ backgroundColor: getBgColor(catData.total, pivotData.maxAbsValue) }}
+                    onClick={() => onCellClick?.(catId === 'uncategorized' ? undefined : (catId as string))}
                   >
                     {formatRoundedAmount(catData.total, true)}
                   </td>
                   {displayedYears.map(year => (
-                    <td 
-                      key={year} 
-                      className={cn("px-6 text-right text-slate-900 dark:text-slate-100", compactView ? "py-1" : "py-4")}
-                      style={{ backgroundColor: getBgColor(catData.years[year].total, pivotData.maxAbsValue) }}
-                    >
-                      {formatRoundedAmount(catData.years[year].total, true)}
-                    </td>
+                    <React.Fragment key={year}>
+                      <td 
+                        className={cn("px-6 text-right text-slate-900 dark:text-slate-100 cursor-pointer hover:opacity-80", compactView ? "py-1" : "py-4")}
+                        style={{ backgroundColor: getBgColor(catData.years[year].total, pivotData.maxAbsValue) }}
+                        onClick={() => onCellClick?.(catId === 'uncategorized' ? undefined : (catId as string), year)}
+                      >
+                        {formatRoundedAmount(catData.years[year].total, true)}
+                      </td>
+                      {expandedYears[year] && pivotData.months.map(month => (
+                        <td 
+                          key={`${year}-${month}`}
+                          className={cn("px-4 text-right text-xs text-slate-900 dark:text-slate-100 cursor-pointer hover:opacity-80", compactView ? "py-1" : "py-4")}
+                          style={{ backgroundColor: getBgColor(catData.years[year].months[month], pivotData.maxAbsValue) }}
+                          onClick={() => onCellClick?.(catId === 'uncategorized' ? undefined : (catId as string), year, month)}
+                        >
+                          {formatRoundedAmount(catData.years[year].months[month], true)}
+                        </td>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tr>
-                {expandedCategories[catId] && displayedYears.map(year => (
-                  pivotData.months.map(month => {
-                    const amount = catData.years[year].months[month];
-                    if (amount === 0) return null;
-                    return (
-                      <tr key={`${catId}-${year}-${month}`} className="bg-slate-50/50 dark:bg-slate-900/50">
-                        <td className={cn("px-6 pl-12 text-slate-500 dark:text-slate-400 text-xs", compactView ? "py-0.5" : "py-2")}>
-                          {format(new Date(year, month), 'MMMM yyyy')}
+                {expandedCategories[catId] && Object.entries(catData.accounts).map(([accountId, accData]: any) => (
+                  <tr key={`${catId}-${accountId}`} className="bg-slate-50/30 dark:bg-slate-900/30 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className={cn("px-6 pl-12 text-slate-500 dark:text-slate-400 text-sm", compactView ? "py-0.5" : "py-2")}>
+                      {accountId === 'unassigned' ? 'Unassigned' : accounts?.find((a: any) => a.id.toString() === accountId)?.name || accountId}
+                    </td>
+                    <td 
+                      className={cn("px-6 text-right font-medium text-slate-700 dark:text-slate-300 cursor-pointer hover:opacity-80", compactView ? "py-0.5" : "py-2")}
+                      style={{ backgroundColor: getBgColor(accData.total, pivotData.maxAbsValue) }}
+                      onClick={() => onCellClick?.(catId === 'uncategorized' ? undefined : (catId as string), undefined, undefined, accountId)}
+                    >
+                      {formatRoundedAmount(accData.total, true)}
+                    </td>
+                    {displayedYears.map(year => (
+                      <React.Fragment key={year}>
+                        <td 
+                          className={cn("px-6 text-right text-slate-700 dark:text-slate-300 cursor-pointer hover:opacity-80", compactView ? "py-0.5" : "py-2")}
+                          style={{ backgroundColor: getBgColor(accData.years[year].total, pivotData.maxAbsValue) }}
+                          onClick={() => onCellClick?.(catId === 'uncategorized' ? undefined : (catId as string), year, undefined, accountId)}
+                        >
+                          {formatRoundedAmount(accData.years[year].total, true)}
                         </td>
-                        <td className={cn("px-6 text-right", compactView ? "py-0.5" : "py-2")}></td>
-                        {displayedYears.map(y => (
+                        {expandedYears[year] && pivotData.months.map(month => (
                           <td 
-                            key={y} 
-                            className={cn("px-6 text-right text-xs text-slate-900 dark:text-slate-100", compactView ? "py-0.5" : "py-2")}
-                            style={y === year ? { backgroundColor: getBgColor(amount, pivotData.maxAbsValue) } : {}}
+                            key={`${year}-${month}`}
+                            className={cn("px-4 text-right text-xs text-slate-700 dark:text-slate-300 cursor-pointer hover:opacity-80", compactView ? "py-0.5" : "py-2")}
+                            style={{ backgroundColor: getBgColor(accData.years[year].months[month], pivotData.maxAbsValue) }}
+                            onClick={() => onCellClick?.(catId === 'uncategorized' ? undefined : (catId as string), year, month, accountId)}
                           >
-                            {y === year ? formatRoundedAmount(amount, true) : '-'}
+                            {formatRoundedAmount(accData.years[year].months[month], true)}
                           </td>
                         ))}
-                      </tr>
-                    );
-                  })
+                      </React.Fragment>
+                    ))}
+                  </tr>
                 ))}
               </React.Fragment>
             ))}
@@ -676,16 +767,302 @@ export function CategoriesTab({ transactions, categories, formatRoundedAmount, c
                 {formatRoundedAmount(pivotData.grandTotal, true)}
               </td>
               {displayedYears.map(year => (
-                <td 
-                  key={year} 
-                  className={cn("px-6 text-right text-slate-900 dark:text-slate-100", compactView ? "py-1" : "py-4")}
-                  style={{ backgroundColor: getBgColor(pivotData.yearTotals[year], pivotData.maxAbsValue) }}
-                >
-                  {formatRoundedAmount(pivotData.yearTotals[year], true)}
-                </td>
+                <React.Fragment key={year}>
+                  <td 
+                    className={cn("px-6 text-right text-slate-900 dark:text-slate-100", compactView ? "py-1" : "py-4")}
+                    style={{ backgroundColor: getBgColor(pivotData.yearTotals[year], pivotData.maxAbsValue) }}
+                  >
+                    {formatRoundedAmount(pivotData.yearTotals[year], true)}
+                  </td>
+                  {expandedYears[year] && pivotData.months.map(month => (
+                    <td 
+                      key={`total-${year}-${month}`}
+                      className={cn("px-4 text-right text-xs text-slate-900 dark:text-slate-100", compactView ? "py-1" : "py-4")}
+                      style={{ backgroundColor: getBgColor(pivotData.yearMonthTotals[year][month], pivotData.maxAbsValue) }}
+                    >
+                      {formatRoundedAmount(pivotData.yearMonthTotals[year][month], true)}
+                    </td>
+                  ))}
+                </React.Fragment>
               ))}
             </tr>
           </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function CategoryDetailsTab({ transactions, categories, accounts, formatRoundedAmount, compactView, initialFilters }: any) {
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialFilters?.categoryId || 'all');
+  const [selectedAccount, setSelectedAccount] = useState<string>(initialFilters?.accountId || 'all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (initialFilters) {
+      if (initialFilters.categoryId) setSelectedCategory(initialFilters.categoryId);
+      else setSelectedCategory('all');
+
+      if (initialFilters.accountId) setSelectedAccount(initialFilters.accountId.toString());
+      else setSelectedAccount('all');
+
+      if (initialFilters.year) {
+        if (initialFilters.month !== undefined) {
+          const monthStr = (initialFilters.month + 1).toString().padStart(2, '0');
+          // Standardize start date to the first date and end date to the maximum logical bounds
+          const ymStart = `${initialFilters.year}-${monthStr}-01`;
+          
+          // Earning last day logically (leap year support handled properly by date manipulation)
+          const lastDay = new Date(initialFilters.year, initialFilters.month + 1, 0).getDate();
+          const ymEnd = `${initialFilters.year}-${monthStr}-${lastDay.toString().padStart(2, '0')}`;
+          
+          setStartDate(ymStart);
+          setEndDate(ymEnd);
+        } else {
+          setStartDate(`${initialFilters.year}-01-01`);
+          setEndDate(`${initialFilters.year}-12-31`);
+        }
+      } else {
+        setStartDate('');
+        setEndDate('');
+      }
+    }
+  }, [initialFilters]);
+
+  const groupedData = useMemo(() => {
+    if (!transactions) return [];
+
+    let txs = transactions;
+    if (selectedCategory !== 'all') {
+      if (selectedCategory === 'uncategorized') {
+        txs = txs.filter((t: any) => !t.category_id);
+      } else {
+        const catIdNum = Number(selectedCategory);
+        txs = txs.filter((t: any) => t.category_id === catIdNum);
+      }
+    }
+    
+    if (selectedAccount !== 'all') {
+      if (selectedAccount === 'unassigned') {
+        txs = txs.filter((t: any) => !t.account_id);
+      } else {
+        const accIdNum = Number(selectedAccount);
+        txs = txs.filter((t: any) => t.account_id === accIdNum);
+      }
+    }
+
+    if (startDate) {
+      txs = txs.filter((t: any) => {
+        if (!t.date) return false;
+        // Compare full date string up to yyyy-mm-dd
+        const txDate = t.date.substring(0, 10);
+        return txDate >= startDate;
+      });
+    }
+
+    if (endDate) {
+      txs = txs.filter((t: any) => {
+        if (!t.date) return false;
+        const txDate = t.date.substring(0, 10);
+        return txDate <= endDate;
+      });
+    }
+    
+    const groups: Record<string, { keyword: string, total: number, transactions: any[] }> = {};
+    
+    txs.forEach((t: any) => {
+      const desc = t.description || '';
+      // Find first word, handle special characters gracefully.
+      const firstWordRaw = desc.trim().split(/[\s-]+/)[0] || 'Unknown';
+      // remove any non-alphanumeric trailing/leading chars for clean grouping if desired, but lowercasing is enough usually
+      const keywordLower = firstWordRaw.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+      const groupKey = keywordLower || 'unknown';
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = { 
+          keyword: firstWordRaw.charAt(0).toUpperCase() + firstWordRaw.slice(1).toLowerCase(), 
+          total: 0, 
+          transactions: [] 
+        };
+      }
+      groups[groupKey].total += t.amount;
+      groups[groupKey].transactions.push(t);
+    });
+
+    Object.values(groups).forEach(g => {
+      g.transactions.sort((a, b) => b.date.localeCompare(a.date));
+    });
+    
+    return Object.values(groups).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  }, [transactions, selectedCategory, selectedAccount, startDate, endDate]);
+
+  const toggleGroup = (keyword: string) => {
+    setExpandedGroups(prev => ({ ...prev, [keyword]: !prev[keyword] }));
+  };
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden p-6">
+      <div className="flex flex-col gap-6 mb-8">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Category Details</h3>
+        
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="flex-1 space-y-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category Filter</label>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="all">All Categories</option>
+              <option value="uncategorized">Uncategorized</option>
+              {categories?.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1 space-y-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Account Filter</label>
+            <select
+              value={selectedAccount}
+              onChange={(e) => setSelectedAccount(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="all">All Accounts</option>
+              <option value="unassigned">Unassigned</option>
+              {accounts?.filter((a: any) => !a.is_archived).map((a: any) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-[2] space-y-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Date Range Filter</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <span className="text-slate-500">to</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              {(startDate || endDate) && (
+                <button
+                  className="px-3 h-10 rounded-lg text-sm font-medium transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                  }}
+                >
+                  Clear Range
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-y border-slate-200 dark:border-slate-800">
+            <tr>
+              <th className={cn("px-6 font-medium", compactView ? "py-2" : "py-3")}>Description Group</th>
+              <th className={cn("px-6 font-medium text-right", compactView ? "py-2" : "py-3")}>Total Amount</th>
+              <th className={cn("px-6 font-medium text-left", compactView ? "py-2" : "py-3")}>Category</th>
+              <th className={cn("px-6 font-medium text-left", compactView ? "py-2" : "py-3")}>Account</th>
+              <th className={cn("px-6 font-medium text-right", compactView ? "py-2" : "py-3")}>Transactions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+            {groupedData.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-8 text-center text-slate-500 dark:text-slate-400">
+                  No transactions found for the selected filters.
+                </td>
+              </tr>
+            ) : (
+              groupedData.map(group => group.transactions.length === 1 ? (
+                <tr key={group.transactions[0].id || group.keyword} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <td className={cn("px-6 font-medium text-slate-700 dark:text-slate-300 flex items-center", compactView ? "py-2" : "py-4")}>
+                    <span className="text-slate-400 dark:text-slate-500 mr-3 text-xs font-normal">{group.transactions[0].date}</span>
+                    {group.transactions[0].description}
+                  </td>
+                  <td className={cn("px-6 text-right font-medium", compactView ? "py-2" : "py-4", group.total < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                    {formatRoundedAmount(group.total)}
+                  </td>
+                  <td className={cn("px-6 text-slate-500 dark:text-slate-400 text-sm", compactView ? "py-2" : "py-4")}>
+                    {categories?.find((c: any) => c.id === group.transactions[0].category_id)?.name || 'Uncategorized'}
+                  </td>
+                  <td className={cn("px-6 text-slate-500 dark:text-slate-400 text-sm", compactView ? "py-2" : "py-4")}>
+                    {accounts?.find((a: any) => a.id === group.transactions[0].account_id)?.name || 'Unassigned'}
+                  </td>
+                  <td className={cn("px-6 text-right text-slate-400 dark:text-slate-500", compactView ? "py-2" : "py-4")}>
+                    1
+                  </td>
+                </tr>
+              ) : (
+                <React.Fragment key={group.keyword}>
+                  <tr 
+                    className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                    onClick={() => toggleGroup(group.keyword)}
+                  >
+                    <td className={cn("px-6 font-medium text-slate-900 dark:text-slate-100 flex items-center", compactView ? "py-2" : "py-4")}>
+                      {expandedGroups[group.keyword] ? <ChevronDown className="w-4 h-4 mr-2 text-slate-400" /> : <ChevronRight className="w-4 h-4 mr-2 text-slate-400" />}
+                      {group.keyword}
+                    </td>
+                    <td className={cn("px-6 text-right font-medium", compactView ? "py-2" : "py-4", group.total < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                      {formatRoundedAmount(group.total)}
+                    </td>
+                    <td className={cn("px-6", compactView ? "py-2" : "py-4")}></td>
+                    <td className={cn("px-6", compactView ? "py-2" : "py-4")}></td>
+                    <td className={cn("px-6 text-right text-slate-500 dark:text-slate-400", compactView ? "py-2" : "py-4")}>
+                      {group.transactions.length}
+                    </td>
+                  </tr>
+                  {expandedGroups[group.keyword] && group.transactions.map((t: any) => (
+                    <tr key={t.id} className="bg-slate-50/50 dark:bg-slate-900/30">
+                      <td className={cn("px-6 pl-12 text-slate-600 dark:text-slate-300", compactView ? "py-1.5" : "py-2")}>
+                        <span className="text-slate-400 dark:text-slate-500 mr-3 text-xs">{t.date}</span>
+                        {t.description}
+                      </td>
+                      <td className={cn("px-6 text-right", compactView ? "py-1.5" : "py-2", t.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                        {formatRoundedAmount(t.amount)}
+                      </td>
+                      <td className={cn("px-6 text-slate-500 dark:text-slate-400 text-sm", compactView ? "py-1.5" : "py-2")}>
+                        {categories?.find((c: any) => c.id === t.category_id)?.name || 'Uncategorized'}
+                      </td>
+                      <td className={cn("px-6 text-slate-500 dark:text-slate-400 text-sm", compactView ? "py-1.5" : "py-2")}>
+                        {accounts?.find((a: any) => a.id === t.account_id)?.name || 'Unassigned'}
+                      </td>
+                      <td className={cn("px-6", compactView ? "py-1.5" : "py-2")}></td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))
+            )}
+          </tbody>
+          {groupedData.length > 0 && (
+            <tfoot className="bg-slate-50 dark:bg-slate-950 font-semibold border-t border-slate-200 dark:border-slate-800">
+              <tr>
+                <td className={cn("px-6 text-slate-900 dark:text-slate-100", compactView ? "py-2" : "py-4")}>Total</td>
+                <td className={cn("px-6 text-right", compactView ? "py-2" : "py-4")}>
+                  {formatRoundedAmount(groupedData.reduce((sum, g) => sum + g.total, 0))}
+                </td>
+                <td colSpan={2} className={cn("px-6 text-right text-slate-900 dark:text-slate-100", compactView ? "py-2" : "py-4")}></td>
+                <td className={cn("px-6 text-right text-slate-900 dark:text-slate-100", compactView ? "py-2" : "py-4")}>
+                  {groupedData.reduce((sum, g) => sum + g.transactions.length, 0)}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>

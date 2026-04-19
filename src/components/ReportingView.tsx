@@ -11,7 +11,7 @@ import {
   calculateFinancialFreedomYears
 } from '../lib/reportingUtils';
 import { formatAmount } from '../lib/formatters';
-import { NetWorthTab, SavingsRateTab, AccountsTab, CategoriesTab } from './ReportingTabs';
+import { NetWorthTab, SavingsRateTab, AccountsTab, CategoriesTab, CategoryDetailsTab } from './ReportingTabs';
 
 export function ReportingView() {
   const transactions = useLiveQuery(() => db.transactions.toArray());
@@ -24,7 +24,13 @@ export function ReportingView() {
   const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'default';
   const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
 
-  const [activeTab, setActiveTab] = useState<'netWorth' | 'categories' | 'savingsRate' | 'accounts'>('netWorth');
+  const [activeTab, setActiveTab] = useState<'netWorth' | 'categories' | 'savingsRate' | 'accounts' | 'categoryDetails'>('netWorth');
+  const [initialCategoryDetailsFilter, setInitialCategoryDetailsFilter] = useState<{ categoryId?: string, year?: number, month?: number, accountId?: string } | undefined>();
+
+  const handleCellClick = (categoryId?: string, year?: number, month?: number, accountId?: string) => {
+    setInitialCategoryDetailsFilter({ categoryId, year, month, accountId });
+    setActiveTab('categoryDetails');
+  };
 
   const formatRoundedAmount = (amount: number, hideZero = false) => {
     if (hideZero && Math.round(amount) === 0) return '';
@@ -66,6 +72,12 @@ export function ReportingView() {
           onClick={() => setActiveTab('categories')}
         >
           Categories
+        </button>
+        <button
+          className={`px-4 py-2 font-medium text-sm whitespace-nowrap ${activeTab === 'categoryDetails' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+          onClick={() => setActiveTab('categoryDetails')}
+        >
+          Categories details
         </button>
         <button
           className={`px-4 py-2 font-medium text-sm whitespace-nowrap ${activeTab === 'savingsRate' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
@@ -114,8 +126,21 @@ export function ReportingView() {
         <CategoriesTab 
           transactions={transactions} 
           categories={categories} 
+          accounts={accounts}
           formatRoundedAmount={formatRoundedAmount} 
           compactView={compactView} 
+          onCellClick={handleCellClick}
+        />
+      )}
+
+      {activeTab === 'categoryDetails' && (
+        <CategoryDetailsTab 
+          transactions={transactions} 
+          categories={categories} 
+          accounts={accounts}
+          formatRoundedAmount={formatRoundedAmount} 
+          compactView={compactView} 
+          initialFilters={initialCategoryDetailsFilter}
         />
       )}
     </div>

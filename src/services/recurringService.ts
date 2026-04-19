@@ -36,9 +36,12 @@ export async function processRecurringTransactions(isInitial: boolean = false): 
             const existing = await db.transactions.where('external_id').equals(externalId).first();
             
             if (!existing) {
-              console.log(`Booking transaction for ${nextDateStr}: ${template.description}`);
+              const currentNextDateObj = parseISO(nextDateStr);
+              const appendStr = ` ${currentNextDateObj.getMonth() + 1}/${currentNextDateObj.getFullYear()}`;
+              const descriptionWithDate = `${template.description}${appendStr}`;
+              console.log(`Booking transaction for ${nextDateStr}: ${descriptionWithDate}`);
               const newTransaction: Transaction = {
-                description: template.description,
+                description: descriptionWithDate,
                 amount: template.amount,
                 date: nextDateStr,
                 account_id: template.account_id,
