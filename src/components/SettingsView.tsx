@@ -10,10 +10,12 @@ import {
   PieChart, Coins, Building, Landmark, ChevronUp, ChevronDown, ChevronRight,
   GripVertical, ShoppingBag, Utensils, Car, Heart, Coffee, 
   Smartphone, Music, Plane, Gift, GraduationCap, Shield, Hammer,
-  DollarSign, ArrowUpRight, ArrowDownLeft, AlertCircle
+  DollarSign, ArrowUpRight, ArrowDownLeft, AlertCircle, Lock
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
+import { hashPassword, generateSaltHex, encryptData, decryptData } from '../lib/crypto';
+import { generateExportData, processImportData } from '../lib/backup';
 
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
   const [isConfirming, setIsConfirming] = useState(false);
@@ -1887,11 +1889,13 @@ const SortableRuleRow: React.FC<{
 
 export function SettingsView({ 
   currentFilePath, 
+  sessionPassword,
   onOpen, 
   onSave, 
   onSaveAs 
 }: { 
   currentFilePath?: string | null, 
+  sessionPassword?: string | null,
   onOpen?: () => void, 
   onSave?: () => void, 
   onSaveAs?: () => void 
@@ -1900,6 +1904,7 @@ export function SettingsView({
   const accountTypes = useLiveQuery(() => db.account_types.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.toArray());
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [securitySuccessMessage, setSecuritySuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const updateSetting = async (key: string, value: any) => {
@@ -1914,31 +1919,27 @@ export function SettingsView({
   
   const handleBackup = async () => {
     try {
-      const data = {
-        transactions: await db.transactions.toArray(),
-        accounts: await db.accounts.toArray(),
-        categories: await db.categories.toArray(),
-        category_rules: await db.category_rules.toArray(),
-        account_types: await db.account_types.toArray(),
-        version: 2,
-        timestamp: Date.now()
-      };
+      let finalString = await generateExportData();
       
-      const jsonString = JSON.stringify(data, null, 2);
-      const fileName = `onefilefinance-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
+      if (isEncryptionEnabled && sessionPassword) {
+        finalString = await encryptData(finalString, sessionPassword);
+      }
+      
+      const fileName = `onefilefinance-backup-${format(new Date(), 'yyyy-MM-dd')}.fin`;
 
       if ('showSaveFilePicker' in window) {
         try {
           const handle = await (window as any).showSaveFilePicker({
             suggestedName: fileName,
             types: [{
-              description: 'JSON File',
-              accept: { 'application/json': ['.json'] },
+              description: 'OneFileFinance Data',
+              accept: { 'application/octet-stream': ['.fin'] },
             }],
           });
           const writable = await handle.createWritable();
-          await writable.write(jsonString);
+          await writable.write(finalString);
           await writable.close();
+          await updateSetting('lastBackup', Date.now());
           setSuccessMessage(`Backup exported successfully to ${handle.name}`);
           setTimeout(() => setSuccessMessage(null), 5000);
           return;
@@ -1948,7 +1949,7 @@ export function SettingsView({
         }
       }
 
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      const blob = new Blob([finalString], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1956,6 +1957,7 @@ export function SettingsView({
       a.click();
       URL.revokeObjectURL(url);
       
+      await updateSetting('lastBackup', Date.now());
       setSuccessMessage(`Backup exported successfully to your Downloads folder`);
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
@@ -1965,6 +1967,49 @@ export function SettingsView({
   };
 
   const [isConfirmingRestore, setIsConfirmingRestore] = useState(false);
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const hasPassword = useMemo(() => !!settings?.find(s => s.key === 'appPasswordHash')?.value, [settings]);
+  const isEncryptionEnabled = !!settings?.find(s => s.key === 'fileEncryptionEnabled')?.value;
+
+  const handleSetPassword = async () => {
+    if (newPassword !== confirmPassword) {
+      setError("Passwords don't match");
+      return;
+    }
+    if (newPassword.length < 1) {
+      setError("Password cannot be empty");
+      return;
+    }
+
+    try {
+      const salt = generateSaltHex();
+      const hash = await hashPassword(newPassword, salt);
+      
+      await db.settings.put({ key: 'appPasswordHash', value: hash, updated_at: Date.now() });
+      await db.settings.put({ key: 'appPasswordSalt', value: salt, updated_at: Date.now() });
+      
+      setSecuritySuccessMessage('Password successfully updated');
+      setShowPasswordSetup(false);
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setSecuritySuccessMessage(null), 5000);
+      setTimeout(() => window.location.reload(), 1000); // Reload App
+    } catch (err) {
+      console.error(err);
+      setError('Failed to configure password');
+    }
+  };
+
+  const handleRemovePassword = async () => {
+    await db.settings.delete('appPasswordHash');
+    await db.settings.delete('appPasswordSalt');
+    await db.settings.put({ key: 'fileEncryptionEnabled', value: false, updated_at: Date.now() });
+    setSecuritySuccessMessage('Password protection removed');
+    setTimeout(() => setSecuritySuccessMessage(null), 5000);
+    setTimeout(() => window.location.reload(), 1000); // Reload App
+  };
 
   const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1982,21 +2027,18 @@ export function SettingsView({
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string);
+        let text = event.target?.result as string;
         
-        await db.transaction('rw', [db.transactions, db.accounts, db.categories, db.category_rules, db.account_types], async () => {
-          await db.transactions.clear();
-          await db.accounts.clear();
-          await db.categories.clear();
-          await db.category_rules.clear();
-          await db.account_types.clear();
-          
-          await db.transactions.bulkAdd(data.transactions);
-          await db.accounts.bulkAdd(data.accounts);
-          await db.categories.bulkAdd(data.categories);
-          await db.category_rules.bulkAdd(data.category_rules);
-          if (data.account_types) await db.account_types.bulkAdd(data.account_types);
-        });
+        if (text.startsWith('OFF_ENC::')) {
+          if (!sessionPassword) {
+            alert('This file is encrypted. You must unlock the app with the correct password first, or log out and log back in.');
+            setIsConfirmingRestore(false);
+            return;
+          }
+          text = await decryptData(text, sessionPassword);
+        }
+
+        await processImportData(text);
         
         setIsConfirmingRestore(false);
         window.location.reload();
@@ -2019,7 +2061,7 @@ export function SettingsView({
           { id: 'categories', label: 'Categories', icon: Tag },
           { id: 'automation', label: 'Automation', icon: Zap },
           { id: 'ui', label: 'UI / Display', icon: Eye },
-          { id: 'data', label: 'Data & Backup', icon: Download },
+          { id: 'data', label: 'Data Management', icon: Download },
         ].map(tab => (
           <button
             key={tab.id}
@@ -2257,121 +2299,232 @@ export function SettingsView({
         )}
 
         {activeTab === 'data' && (
-          <section className="animate-fade-in">
+          <section className="animate-fade-in max-w-2xl">
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg">
-                  <Download className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Data Management</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Backup and restore your local financial data</p>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Data Management</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Backup and restore your local financial data</p>
+                  </div>
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    OneFileFinance stores all your data locally in your browser's IndexedDB. 
-                    This ensures your privacy and works offline. However, clearing your browser data 
-                    may delete your records. We recommend regular backups.
-                  </p>
-                    <div className="flex gap-3 mt-4">
-                      {window.__TAURI_INTERNALS__ ? (
-                        <div className="w-full space-y-4">
-                          <div className="flex items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
-                            <span className="text-sm text-slate-500 mr-2">Current LogicFile:</span>
-                            <span className="text-sm font-mono text-slate-900 dark:text-slate-100 truncate flex-1">
-                              {currentFilePath || 'Unsaved'}
-                            </span>
-                          </div>
-                          <div className="flex gap-3">
-                            <button 
-                              onClick={onOpen}
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
-                            >
-                              <Upload className="w-4 h-4" />
-                              Open
-                            </button>
-                            <button 
-                              onClick={onSave}
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm"
-                            >
-                              <Download className="w-4 h-4" />
-                              Save
-                            </button>
-                            <button 
-                              onClick={onSaveAs}
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
-                            >
-                              <Download className="w-4 h-4" />
-                              Save As
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <button 
-                            onClick={handleBackup}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm"
-                          >
-                            <Download className="w-4 h-4" />
-                            Export Backup
-                          </button>
-                          <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-sm">
-                            <Upload className="w-4 h-4" />
-                            Import Data
-                            <input type="file" accept=".json" className="hidden" onChange={handleRestore} />
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  {successMessage && (
-                    <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl animate-fade-in">
-                      <p className="text-sm text-emerald-800 dark:text-emerald-400 font-medium flex items-center gap-2">
-                        <Check className="w-4 h-4" />
-                        {successMessage}
-                      </p>
-                    </div>
-                  )}
-                  {isConfirmingRestore && (
-                    <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/40 rounded-xl animate-fade-in">
-                      <p className="text-sm text-rose-800 dark:text-rose-400 font-medium mb-3">
-                        Warning: This will overwrite all current data. Are you sure?
-                      </p>
-                      <div className="flex gap-2">
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  OneFileFinance stores all your data locally in your browser's IndexedDB. 
+                  This ensures your privacy and works offline. However, clearing your browser data 
+                  may delete your records. We recommend regular backups into a OneFileFinance (.fin) file.
+                </p>
+                <div className="flex items-center text-sm">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium mr-2">Last Saved:</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300">
+                    {settings?.find(s => s.key === 'lastBackup')?.value 
+                      ? format(new Date(settings.find(s => s.key === 'lastBackup')?.value as number), 'MMM d, yyyy h:mm a')
+                      : 'Never'}
+                  </span>
+                </div>
+                <div className="flex gap-3 mt-4">
+                  {(window as any).__TAURI_INTERNALS__ ? (
+                    <div className="w-full space-y-4">
+                      <div className="flex items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                        <span className="text-sm text-slate-500 mr-2">Current File:</span>
+                        <span className="text-sm font-mono text-slate-900 dark:text-slate-100 truncate flex-1">
+                          {currentFilePath || 'Unsaved'}
+                        </span>
+                      </div>
+                      <div className="flex gap-3">
                         <button 
-                          onClick={executeRestore}
-                          className="px-4 py-2 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-700 transition-colors"
+                          onClick={onOpen}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
                         >
-                          Yes, Overwrite Everything
+                          <Upload className="w-4 h-4" />
+                          Open
                         </button>
                         <button 
-                          onClick={() => setIsConfirmingRestore(false)}
-                          className="px-4 py-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                          onClick={onSave}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm"
                         >
-                          Cancel
+                          <Download className="w-4 h-4" />
+                          Save
+                        </button>
+                        <button 
+                          onClick={onSaveAs}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                        >
+                          <Download className="w-4 h-4" />
+                          Save As
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={handleBackup}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export Backup
+                      </button>
+                      <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-sm">
+                        <Upload className="w-4 h-4" />
+                        Import Data
+                        <input type="file" accept=".fin,.json" className="hidden" onChange={handleRestore} />
+                      </label>
+                    </>
                   )}
                 </div>
-                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-100 dark:border-slate-800">
-                  <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">System Info</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 dark:text-slate-400">Storage Type</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">IndexedDB (Dexie)</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 dark:text-slate-400">Last Backup</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">Never</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 dark:text-slate-400">Data Version</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">v3.0</span>
+                {successMessage && (
+                  <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl animate-fade-in">
+                    <p className="text-sm text-emerald-800 dark:text-emerald-400 font-medium flex items-center gap-2">
+                      <Check className="w-4 h-4" />
+                      {successMessage}
+                    </p>
+                  </div>
+                )}
+                {isConfirmingRestore && (
+                  <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/40 rounded-xl animate-fade-in">
+                    <p className="text-sm text-rose-800 dark:text-rose-400 font-medium mb-3">
+                      Warning: This will overwrite all current data. Are you sure?
+                    </p>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={executeRestore}
+                        className="px-4 py-2 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-700 transition-colors"
+                      >
+                        Yes, Overwrite Everything
+                      </button>
+                      <button 
+                        onClick={() => setIsConfirmingRestore(false)}
+                        className="px-4 py-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mt-8">
+              <div className="p-8 space-y-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Security</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Manage password protection and encryption</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-100 dark:border-slate-800 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">Password Protection</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">Require a password to access this app and optionally encrypt backup files.</p>
+                    </div>
+                    <div>
+                      {!hasPassword ? (
+                        <button 
+                          onClick={() => { setShowPasswordSetup(true); setError(null); }}
+                          className="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-bold rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
+                        >
+                          Set Password
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={handleRemovePassword}
+                          className="px-4 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 text-sm font-bold rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors whitespace-nowrap"
+                        >
+                          Remove Password
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {showPasswordSetup && !hasPassword && (
+                    <div className="pt-4 border-t border-slate-200 dark:border-slate-700/50 space-y-4 animate-fade-in">
+                      <div className="space-y-4 max-w-sm">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">New Password</label>
+                          <input 
+                            type="password" 
+                            value={newPassword}
+                            onChange={(e) => { setNewPassword(e.target.value); setError(null); }}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Confirm Password</label>
+                          <input 
+                            type="password" 
+                            value={confirmPassword}
+                            onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        {error && (
+                          <div className="text-sm font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                            <AlertCircle className="w-4 h-4" />
+                            {error}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={handleSetPassword}
+                            disabled={!newPassword || !confirmPassword}
+                            className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button 
+                            onClick={() => { setShowPasswordSetup(false); setNewPassword(''); setConfirmPassword(''); setError(null); }}
+                            className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {hasPassword && (
+                    <div className="pt-6 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                          Encrypt Backup Files
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Encrypt backups so they cannot be read without your password</p>
+                      </div>
+                      <div className="flex items-center gap-3 cursor-pointer group">
+                        <div 
+                          onClick={() => updateSetting('fileEncryptionEnabled', !isEncryptionEnabled)}
+                          className={cn(
+                            "w-10 h-5 rounded-full transition-colors relative",
+                            isEncryptionEnabled ? "bg-accent" : "bg-slate-300 dark:bg-slate-700"
+                          )}
+                        >
+                          <div className={cn(
+                            "absolute top-0.5 left-0.5 bg-white w-4 h-4 rounded-full transition-transform shadow-sm",
+                            isEncryptionEnabled ? "translate-x-5" : "translate-x-0"
+                          )} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {securitySuccessMessage && (
+                    <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl animate-fade-in">
+                      <p className="text-sm text-emerald-800 dark:text-emerald-400 font-medium flex items-center gap-2">
+                        <Check className="w-4 h-4" />
+                        {securitySuccessMessage}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

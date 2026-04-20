@@ -892,10 +892,15 @@ export function CategoryDetailsTab({ transactions, categories, accounts, formatR
     });
 
     Object.values(groups).forEach(g => {
-      g.transactions.sort((a, b) => b.date.localeCompare(a.date));
+      g.transactions.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     });
     
-    return Object.values(groups).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+    return Object.values(groups).sort((a, b) => {
+      if (b.transactions.length !== a.transactions.length) {
+        return b.transactions.length - a.transactions.length;
+      }
+      return (b.transactions[0]?.date || '').localeCompare(a.transactions[0]?.date || '');
+    });
   }, [transactions, selectedCategory, selectedAccount, startDate, endDate]);
 
   const toggleGroup = (keyword: string) => {

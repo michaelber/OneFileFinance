@@ -5,6 +5,7 @@ import { SettingsView } from './components/SettingsView';
 import { RecurringTransactionsTable } from './components/RecurringTransactionsTable';
 import { ImportView } from './components/ImportView';
 import { ReportingView } from './components/ReportingView';
+import { LoginScreen } from './components/LoginScreen';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import { format } from 'date-fns';
@@ -12,9 +13,13 @@ import { TrendingUp, TrendingDown, Wallet, PieChart, Save } from 'lucide-react';
 import { cn } from './lib/utils';
 import { processRecurringTransactions } from './services/recurringService';
 import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile } from './lib/fileHandling';
+import { encryptData } from './lib/crypto';
 import { StatusBar } from './components/StatusBar';
 
 export default function App() {
+  const [authStatus, setAuthStatus] = useState<'checking' | 'unauthorized' | 'authorized'>('checking');
+  const [sessionPassword, setSessionPassword] = useState<string | null>(null);
+
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>();
   const [view, setView] = useState<'dashboard' | 'settings' | 'recurring' | 'import' | 'reporting'>('dashboard');
   const [newTransactionIds, setNewTransactionIds] = useState<number[]>([]);
@@ -22,33 +27,97 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [addedRecurringCount, setAddedRecurringCount] = useState(0);
   const [importedCount, setImportedCount] = useState(0);
+  const hasProcessedRef = React.useRef(false);
 
-  // Tauri shortcuts & tracking
+  React.useEffect(() => {
+    const checkAuth = async () => {
+      const pathObj = await db.settings.get('currentFilePath');
+      if (pathObj?.value && (window as any).__TAURI_INTERNALS__) {
+        setCurrentFilePath(pathObj.value);
+      }
+
+      const hashObj = await db.settings.get('appPasswordHash');
+      if (hashObj?.value) {
+        setAuthStatus('unauthorized');
+      } else {
+        setAuthStatus('authorized');
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Tauri shortcuts & tracking & auto-save
   React.useEffect(() => {
     if (!(window as any).__TAURI_INTERNALS__) return;
+    
+    let isDirty = false;
+
+    const handleChange = () => {
+      isDirty = true;
+      setSaveStatus('unsaved');
+    };
+
+    // Attempt to hook Dexie changes for Auto-Save
+    try {
+      db.on('changes', handleChange);
+    } catch(e) {
+      // Fallback if db.on('changes') needs an addon that's misconfigured
+      const tables = ['transactions', 'accounts', 'categories', 'category_rules', 'account_types', 'recurring_transactions'];
+      tables.forEach(tableName => {
+        try {
+          db.table(tableName).hook('creating', handleChange);
+          db.table(tableName).hook('updating', handleChange);
+          db.table(tableName).hook('deleting', handleChange);
+        } catch(err) {}
+      });
+    }
     
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
+        isDirty = false; // Prevent auto-save from double saving immediately
         handleSave();
       }
     };
     
-    // Mark as unsaved on any dexie change if we have an open file
-    // Simple way is to just assume changes happen. For now we will rely on explicit user actions to mark unsaved.
-    
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentFilePath]);
+
+    // Auto-save interval (check every 1 minute)
+    const interval = setInterval(() => {
+      if (isDirty && currentFilePath) {
+        isDirty = false;
+        handleSave();
+      }
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      clearInterval(interval);
+      try {
+        db.on('changes').unsubscribe(handleChange);
+      } catch(e) {
+        const tables = ['transactions', 'accounts', 'categories', 'category_rules', 'account_types', 'recurring_transactions'];
+        tables.forEach(tableName => {
+          try {
+            db.table(tableName).hook('creating').unsubscribe(handleChange);
+            db.table(tableName).hook('updating').unsubscribe(handleChange);
+            db.table(tableName).hook('deleting').unsubscribe(handleChange);
+          } catch(err) {}
+        });
+      }
+    };
+  }, [currentFilePath, sessionPassword]);
 
   const handleSave = async () => {
     if (!(window as any).__TAURI_INTERNALS__) return;
     setSaveStatus('saving');
     try {
-      const path = await saveDatabaseToFile(currentFilePath);
+      const path = await saveDatabaseToFile(currentFilePath, sessionPassword);
       if (path) {
         setCurrentFilePath(path);
         setSaveStatus('saved');
+        await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
+        await db.settings.put({ key: 'lastBackup', value: Date.now(), updated_at: Date.now() });
       } else {
         setSaveStatus('unsaved');
       }
@@ -61,10 +130,12 @@ export default function App() {
   const handleSaveAs = async () => {
     setSaveStatus('saving');
     try {
-      const path = await promptSaveAsDatabase();
+      const path = await promptSaveAsDatabase(sessionPassword);
       if (path) {
         setCurrentFilePath(path);
         setSaveStatus('saved');
+        await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
+        await db.settings.put({ key: 'lastBackup', value: Date.now(), updated_at: Date.now() });
       } else {
         setSaveStatus('unsaved');
       }
@@ -76,13 +147,20 @@ export default function App() {
 
   const handleOpen = async () => {
     try {
-      const path = await openDatabaseFromFile();
+      const path = await openDatabaseFromFile(sessionPassword);
       if (path) {
         setCurrentFilePath(path);
+        await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
         setSaveStatus('saved');
       }
-    } catch(err) {
+    } catch(err: any) {
       console.error("Open failed", err);
+      if (err.message === 'FILE_ENCRYPTED' || err.message === 'VERIFICATION_FAILED') {
+          // In a real flow, if currently missing an active session, prompt for pwd
+          alert("Could not open file. Password is incorrect or file is encrypted and no password set.");
+      } else {
+          alert("Failed to open the file due to an error.");
+      }
     }
   };
 
@@ -145,80 +223,10 @@ export default function App() {
     setView('dashboard');
   };
 
-  const hasProcessedRef = React.useRef(false);
-
-  // Ctrl+S to save to linked file
-  React.useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        
-        try {
-          const data = {
-            transactions: await db.transactions.toArray(),
-            accounts: await db.accounts.toArray(),
-            categories: await db.categories.toArray(),
-            category_rules: await db.category_rules.toArray(),
-            account_types: await db.account_types.toArray(),
-            settings: await db.settings.toArray(),
-            recurring_transactions: await db.recurring_transactions.toArray(),
-            version: 2,
-            timestamp: Date.now()
-          };
-          
-          const jsonString = JSON.stringify(data, null, 2);
-          
-          let fileHandleSetting = await db.settings.get('linkedFileHandle');
-          let fileHandle = fileHandleSetting?.value;
-
-          if (!fileHandle) {
-            if (!('showSaveFilePicker' in window)) {
-              // Fallback for browsers without File System Access API
-              const blob = new Blob([jsonString], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `onefilefinance-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-              return;
-            }
-
-            fileHandle = await (window as any).showSaveFilePicker({
-              suggestedName: `onefilefinance-backup-${format(new Date(), 'yyyy-MM-dd')}.json`,
-              types: [{
-                description: 'JSON File',
-                accept: { 'application/json': ['.json'] },
-              }],
-            });
-            await db.settings.put({ key: 'linkedFileHandle', value: fileHandle, updated_at: Date.now() });
-          }
-
-          if (fileHandle) {
-            // Verify permission
-            if (await fileHandle.queryPermission({ mode: 'readwrite' }) !== 'granted') {
-              if (await fileHandle.requestPermission({ mode: 'readwrite' }) !== 'granted') {
-                throw new Error('Permission denied');
-              }
-            }
-
-            const writable = await fileHandle.createWritable();
-            await writable.write(jsonString);
-            await writable.close();
-            console.log('Saved to linked file successfully');
-          }
-        } catch (error) {
-          console.error('Failed to save to linked file:', error);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   // Seed initial data if empty
   React.useEffect(() => {
+    if (authStatus !== 'authorized') return;
+
     const seedData = async () => {
       if (hasProcessedRef.current) return;
       hasProcessedRef.current = true;
@@ -273,7 +281,16 @@ export default function App() {
       }
     };
     seedData();
-  }, []);
+  }, [authStatus]);
+
+  if (authStatus === 'checking') return null;
+
+  if (authStatus === 'unauthorized') {
+    return <LoginScreen onLogin={(pwd) => {
+      setSessionPassword(pwd);
+      setAuthStatus('authorized');
+    }} />;
+  }
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-300">
@@ -335,6 +352,7 @@ export default function App() {
             <div className="max-w-7xl mx-auto">
               <SettingsView 
                 currentFilePath={currentFilePath}
+                sessionPassword={sessionPassword}
                 onOpen={handleOpen}
                 onSave={handleSave}
                 onSaveAs={handleSaveAs}

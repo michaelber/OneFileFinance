@@ -1,0 +1,92 @@
+import React, { useState } from 'react';
+import { db } from '../db';
+import { hashPassword } from '../lib/crypto';
+import { Lock, AlertCircle } from 'lucide-react';
+
+interface LoginScreenProps {
+  onLogin: (password: string) => void;
+}
+
+export function LoginScreen({ onLogin }: LoginScreenProps) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const hashObj = await db.settings.get('appPasswordHash');
+      const saltObj = await db.settings.get('appPasswordSalt');
+
+      if (hashObj && saltObj) {
+        const attemptHash = await hashPassword(password, saltObj.value);
+        if (attemptHash === hashObj.value) {
+          onLogin(password);
+        } else {
+          setError('Incorrect password');
+        }
+      } else {
+        // Fallback if settings are messed up but screen still rendered
+        onLogin(password);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('An error occurred during verification');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 antialiased transition-colors duration-300">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 p-8 transform transition-all">
+        <div className="flex flex-col items-center mb-8">
+          <img 
+            src="/favicon.svg" 
+            alt="OneFileFinance Logo" 
+            className="w-16 h-16 mb-4 drop-shadow-sm"
+            referrerPolicy="no-referrer"
+          />
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">OneFileFinance</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 text-center">
+            This app is password protected
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              autoFocus
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+
+          {error && (
+            <div className="p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/50 rounded-xl flex items-start gap-2 text-rose-600 dark:text-rose-400 mt-4 animate-fade-in">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <p className="text-sm font-medium">{error}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={!password || loading}
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 dark:bg-blue-500 dark:hover:bg-blue-600 dark:disabled:bg-blue-800 text-white font-bold rounded-xl transition-colors flex items-center justify-center shadow-sm disabled:cursor-not-allowed"
+          >
+            {loading ? 'Verifying...' : 'Unlock'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

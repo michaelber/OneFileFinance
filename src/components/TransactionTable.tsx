@@ -487,7 +487,7 @@ const TransactionRow = React.memo(({
         className={cn(
           "px-4 border-r border-transparent transition-all",
           compactView ? "py-1" : "py-2",
-          activeCell?.id === t.id && activeCell?.col === 0 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+          activeCell?.id === t.id && activeCell?.col === 0 && "ring-2 ring-inset ring-blue-500 z-10"
         )}
         onClick={() => handleCellClick(t.id!, 0)}
       >
@@ -518,7 +518,7 @@ const TransactionRow = React.memo(({
         className={cn(
           "px-4 border-r border-transparent transition-all",
           compactView ? "py-1" : "py-2",
-          activeCell?.id === t.id && activeCell?.col === 1 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+          activeCell?.id === t.id && activeCell?.col === 1 && "ring-2 ring-inset ring-blue-500 z-10"
         )}
         onClick={() => handleCellClick(t.id!, 1)}
       >
@@ -543,7 +543,7 @@ const TransactionRow = React.memo(({
         className={cn(
           "px-4 border-r border-transparent transition-all text-right",
           compactView ? "py-1" : "py-2",
-          activeCell?.id === t.id && activeCell?.col === 2 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+          activeCell?.id === t.id && activeCell?.col === 2 && "ring-2 ring-inset ring-blue-500 z-10"
         )}
         onClick={() => handleCellClick(t.id!, 2)}
       >
@@ -576,7 +576,7 @@ const TransactionRow = React.memo(({
         className={cn(
           "px-4 border-r border-transparent transition-all",
           compactView ? "py-1" : "py-2",
-          activeCell?.id === t.id && activeCell?.col === 3 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+          activeCell?.id === t.id && activeCell?.col === 3 && "ring-2 ring-inset ring-blue-500 z-10"
         )}
         onClick={() => handleCellClick(t.id!, 3)}
       >
@@ -620,7 +620,7 @@ const TransactionRow = React.memo(({
         className={cn(
           "px-4 border-r border-transparent transition-all",
           compactView ? "py-1" : "py-2",
-          activeCell?.id === t.id && activeCell?.col === 4 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+          activeCell?.id === t.id && activeCell?.col === 4 && "ring-2 ring-inset ring-blue-500 z-10"
         )}
         onClick={() => handleCellClick(t.id!, 4)}
       >
@@ -1257,7 +1257,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                 className={cn(
                   "px-4 border-r border-transparent transition-all",
                   compactView ? "py-1" : "py-2",
-                  activeCell?.id === 'new' && activeCell?.col === 0 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+                  activeCell?.id === 'new' && activeCell?.col === 0 && "ring-2 ring-inset ring-blue-500 z-10"
                 )}
                 onClick={() => handleCellClick('new', 0)}
               >
@@ -1281,7 +1281,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                 className={cn(
                   "px-4 border-r border-transparent transition-all",
                   compactView ? "py-1" : "py-2",
-                  activeCell?.id === 'new' && activeCell?.col === 1 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+                  activeCell?.id === 'new' && activeCell?.col === 1 && "ring-2 ring-inset ring-blue-500 z-10"
                 )}
                 onClick={() => handleCellClick('new', 1)}
               >
@@ -1319,7 +1319,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                 className={cn(
                   "px-4 border-r border-transparent transition-all text-right",
                   compactView ? "py-1" : "py-2",
-                  activeCell?.id === 'new' && activeCell?.col === 2 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+                  activeCell?.id === 'new' && activeCell?.col === 2 && "ring-2 ring-inset ring-blue-500 z-10"
                 )}
                 onClick={() => handleCellClick('new', 2)}
               >
@@ -1350,7 +1350,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                 className={cn(
                   "px-4 border-r border-transparent transition-all",
                   compactView ? "py-1" : "py-2",
-                  activeCell?.id === 'new' && activeCell?.col === 3 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+                  activeCell?.id === 'new' && activeCell?.col === 3 && "ring-2 ring-inset ring-blue-500 z-10"
                 )}
                 onClick={() => handleCellClick('new', 3)}
               >
@@ -1393,7 +1393,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                 className={cn(
                   "px-4 border-r border-transparent transition-all",
                   compactView ? "py-1" : "py-2",
-                  activeCell?.id === 'new' && activeCell?.col === 4 && "ring-2 ring-inset ring-blue-500 bg-white dark:bg-slate-900 z-10"
+                  activeCell?.id === 'new' && activeCell?.col === 4 && "ring-2 ring-inset ring-blue-500 z-10"
                 )}
                 onClick={() => handleCellClick('new', 4)}
               >

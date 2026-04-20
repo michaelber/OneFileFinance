@@ -102,6 +102,47 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
     }
   }, [settings, selectedAccountId]);
 
+  // Clean loaded mapping against actual file headers
+  useEffect(() => {
+    if (parsedData && mapping) {
+      const headers = parsedData.headers;
+      let hasChanges = false;
+      const newMapping = { ...mapping };
+
+      if (newMapping.date && !headers.includes(newMapping.date)) {
+        newMapping.date = '';
+        hasChanges = true;
+      }
+      if (newMapping.amount && !headers.includes(newMapping.amount)) {
+        newMapping.amount = '';
+        hasChanges = true;
+      }
+      if (newMapping.externalId && !headers.includes(newMapping.externalId)) {
+        newMapping.externalId = '';
+        hasChanges = true;
+      }
+      if (newMapping.account && !headers.includes(newMapping.account)) {
+        newMapping.account = '';
+        hasChanges = true;
+      }
+      if (newMapping.category && !headers.includes(newMapping.category)) {
+        newMapping.category = '';
+        hasChanges = true;
+      }
+      if (Array.isArray(newMapping.description)) {
+        const validDescriptions = newMapping.description.filter(d => headers.includes(d));
+        if (validDescriptions.length !== newMapping.description.length) {
+          newMapping.description = validDescriptions;
+          hasChanges = true;
+        }
+      }
+
+      if (hasChanges) {
+        setMapping(newMapping);
+      }
+    }
+  }, [parsedData]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
