@@ -29,6 +29,39 @@ export const calculateYearlyAverage = (transactions: Transaction[]): number => {
   return calculateMonthlyAverage(transactions) * 12;
 };
 
+export const calculateAverages = (
+  yearTotals: { year: number, total: number }[]
+): { monthlyAverage: number; yearlyAverage: number } => {
+  if (yearTotals.length === 0) return { monthlyAverage: 0, yearlyAverage: 0 };
+  
+  const currentYear = new Date().getFullYear();
+  // We use current month (1-12) to represent elapsed months in the current year.
+  // E.g. in April, it's the 4th month. We treat it as 4 elapsed months.
+  const currentMonth = new Date().getMonth() + 1;
+
+  let totalMonths = 0;
+  let totalAmount = 0;
+
+  yearTotals.forEach(({ year, total }) => {
+    totalAmount += total;
+    if (year < currentYear) {
+      totalMonths += 12;
+    } else if (year === currentYear) {
+      totalMonths += Math.max(1, currentMonth);
+    } else {
+      // Future projection (fallback safety)
+      totalMonths += 12;
+    }
+  });
+
+  if (totalMonths === 0) return { monthlyAverage: 0, yearlyAverage: 0 };
+
+  const monthlyAverage = totalAmount / totalMonths;
+  const yearlyAverage = monthlyAverage * 12;
+
+  return { monthlyAverage, yearlyAverage };
+};
+
 export const calculateExpenses = (transactions: Transaction[]): number => {
   const categoryTotals = transactions.reduce((acc, t) => {
     const catId = t.category_id || 0;

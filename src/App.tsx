@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { TrendingUp, TrendingDown, Wallet, PieChart, Save } from 'lucide-react';
 import { cn } from './lib/utils';
 import { processRecurringTransactions } from './services/recurringService';
-import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile, openDatabaseFromPath } from './lib/fileHandling';
+import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile, openDatabaseFromPath, pickDatabaseFile } from './lib/fileHandling';
 import { encryptData } from './lib/crypto';
 import { StatusBar } from './components/StatusBar';
 
@@ -60,7 +60,7 @@ export default function App() {
 
     // Attempt to hook Dexie changes for Auto-Save
     try {
-      db.on('changes', handleChange);
+      (db as any).on('changes', handleChange);
     } catch(e) {
       // Fallback if db.on('changes') needs an addon that's misconfigured
       const tables = ['transactions', 'accounts', 'categories', 'category_rules', 'account_types', 'recurring_transactions'];
@@ -326,12 +326,17 @@ export default function App() {
              throw e; // LoginScreen will catch and display error
          }
       }}
-      onOpenFile={async (password) => {
+      onOpenFile={async (password, onStartLoading) => {
         try {
-          const path = await openDatabaseFromFile(password);
-          if (path) {
-            setCurrentFilePath(path);
-            await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
+          const path = await pickDatabaseFile();
+          if (!path) return;
+          
+          if (onStartLoading) onStartLoading();
+          
+          const openedPath = await openDatabaseFromPath(path, password);
+          if (openedPath) {
+            setCurrentFilePath(openedPath);
+            await db.settings.put({ key: 'currentFilePath', value: openedPath, updated_at: Date.now() });
             setSaveStatus('saved');
             // Check auth again because the restored file might have a new password hash
             const hashObj = await db.settings.get('appPasswordHash');

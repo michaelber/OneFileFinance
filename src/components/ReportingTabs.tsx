@@ -7,7 +7,7 @@ import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from 
 import * as Icons from 'lucide-react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { calculateCapitalGains } from '../lib/reportingUtils';
+import { calculateCapitalGains, calculateAverages } from '../lib/reportingUtils';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
@@ -519,6 +519,7 @@ export function CategoriesTab({ transactions, categories, accounts, formatRounde
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
   const [visibleYearsCount, setVisibleYearsCount] = useState<number | 'All'>(9);
+  const [showAverages, setShowAverages] = useState(false);
 
   const toggleCategory = (catId: string) => {
     setExpandedCategories(prev => ({
@@ -642,20 +643,31 @@ export function CategoriesTab({ transactions, categories, accounts, formatRounde
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Category Breakdown</h3>
-        <div className="flex items-center gap-4">
-          <label className="text-sm text-slate-500 dark:text-slate-400">Years to show: {visibleYearsCount}</label>
-          <input 
-            type="range" 
-            min="1" 
-            max={pivotData.years.length} 
-            value={visibleYearsCount === 'All' ? pivotData.years.length : visibleYearsCount}
-            onChange={(e) => {
-              const val = Number(e.target.value);
-              if (val === pivotData.years.length) setVisibleYearsCount('All');
-              else setVisibleYearsCount(val);
-            }}
-            className="w-32"
-          />
+        <div className="flex items-center gap-6">
+          <label className="flex items-center gap-2 cursor-pointer group">
+            <div className="relative">
+              <input type="checkbox" className="sr-only" checked={showAverages} onChange={(e) => setShowAverages(e.target.checked)} />
+              <div className={cn("block w-10 h-6 rounded-full transition-colors", showAverages ? 'bg-blue-500' : 'bg-slate-200 dark:bg-slate-700', "group-hover:opacity-90")}></div>
+              <div className={cn("absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform", showAverages ? 'transform translate-x-4' : '')}></div>
+            </div>
+            <span className="text-sm text-slate-600 dark:text-slate-400">Show averages</span>
+          </label>
+          
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-500 dark:text-slate-400">Years to show: {visibleYearsCount}</label>
+            <input 
+              type="range" 
+              min="1" 
+              max={pivotData.years.length} 
+              value={visibleYearsCount === 'All' ? pivotData.years.length : visibleYearsCount}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val === pivotData.years.length) setVisibleYearsCount('All');
+                else setVisibleYearsCount(val);
+              }}
+              className="w-32"
+            />
+          </div>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -664,6 +676,12 @@ export function CategoriesTab({ transactions, categories, accounts, formatRounde
             <tr>
               <th className={cn("px-6 font-medium", compactView ? "py-1.5" : "py-3")}>Category</th>
               <th className={cn("px-6 font-medium text-right", compactView ? "py-1.5" : "py-3")}>Total</th>
+              {showAverages && (
+                <>
+                  <th className={cn("px-6 font-medium text-right border-l-2 border-slate-300 dark:border-slate-700", compactView ? "py-1.5" : "py-3")}>Monthly Avg</th>
+                  <th className={cn("px-6 font-medium text-right border-r-2 border-slate-300 dark:border-slate-700", compactView ? "py-1.5" : "py-3")}>Yearly Avg</th>
+                </>
+              )}
               {displayedYears.map(year => (
                 <React.Fragment key={year}>
                   <th 
@@ -699,6 +717,19 @@ export function CategoriesTab({ transactions, categories, accounts, formatRounde
                   >
                     {formatRoundedAmount(catData.total, true)}
                   </td>
+                  {showAverages && (() => {
+                    const { monthlyAverage, yearlyAverage } = calculateAverages(displayedYears.map(y => ({ year: y, total: catData.years[y].total })));
+                    return (
+                      <>
+                        <td className={cn("px-6 text-right font-medium text-slate-900 dark:text-slate-100 border-l-2 border-slate-300 dark:border-slate-700", compactView ? "py-1" : "py-4")} style={{ backgroundColor: getBgColor(monthlyAverage, pivotData.maxAbsValue/12) }}>
+                          {formatRoundedAmount(monthlyAverage, true)}
+                        </td>
+                        <td className={cn("px-6 text-right font-medium text-slate-900 dark:text-slate-100 border-r-2 border-slate-300 dark:border-slate-700", compactView ? "py-1" : "py-4")} style={{ backgroundColor: getBgColor(yearlyAverage, pivotData.maxAbsValue) }}>
+                          {formatRoundedAmount(yearlyAverage, true)}
+                        </td>
+                      </>
+                    );
+                  })()}
                   {displayedYears.map(year => (
                     <React.Fragment key={year}>
                       <td 
@@ -733,6 +764,19 @@ export function CategoriesTab({ transactions, categories, accounts, formatRounde
                     >
                       {formatRoundedAmount(accData.total, true)}
                     </td>
+                    {showAverages && (() => {
+                      const { monthlyAverage, yearlyAverage } = calculateAverages(displayedYears.map(y => ({ year: y, total: accData.years[y].total })));
+                      return (
+                        <>
+                          <td className={cn("px-6 text-right text-slate-700 dark:text-slate-300 border-l-2 border-slate-300 dark:border-slate-700", compactView ? "py-0.5" : "py-2")} style={{ backgroundColor: getBgColor(monthlyAverage, pivotData.maxAbsValue/12) }}>
+                            {formatRoundedAmount(monthlyAverage, true)}
+                          </td>
+                          <td className={cn("px-6 text-right text-slate-700 dark:text-slate-300 border-r-2 border-slate-300 dark:border-slate-700", compactView ? "py-0.5" : "py-2")} style={{ backgroundColor: getBgColor(yearlyAverage, pivotData.maxAbsValue) }}>
+                            {formatRoundedAmount(yearlyAverage, true)}
+                          </td>
+                        </>
+                      );
+                    })()}
                     {displayedYears.map(year => (
                       <React.Fragment key={year}>
                         <td 
@@ -766,6 +810,19 @@ export function CategoriesTab({ transactions, categories, accounts, formatRounde
               >
                 {formatRoundedAmount(pivotData.grandTotal, true)}
               </td>
+              {showAverages && (() => {
+                const { monthlyAverage, yearlyAverage } = calculateAverages(displayedYears.map(y => ({ year: y, total: pivotData.yearTotals[y] })));
+                return (
+                  <>
+                    <td className={cn("px-6 text-right text-slate-900 dark:text-slate-100 border-l-2 border-slate-300 dark:border-slate-700", compactView ? "py-1" : "py-4")} style={{ backgroundColor: getBgColor(monthlyAverage, pivotData.maxAbsValue/12) }}>
+                      {formatRoundedAmount(monthlyAverage, true)}
+                    </td>
+                    <td className={cn("px-6 text-right text-slate-900 dark:text-slate-100 border-r-2 border-slate-300 dark:border-slate-700", compactView ? "py-1" : "py-4")} style={{ backgroundColor: getBgColor(yearlyAverage, pivotData.maxAbsValue) }}>
+                      {formatRoundedAmount(yearlyAverage, true)}
+                    </td>
+                  </>
+                );
+              })()}
               {displayedYears.map(year => (
                 <React.Fragment key={year}>
                   <td 

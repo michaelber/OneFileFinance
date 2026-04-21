@@ -40,7 +40,7 @@ export async function promptSaveAsDatabase(sessionPassword?: string | null): Pro
   return saveDatabaseToFile(null, sessionPassword);
 }
 
-export async function openDatabaseFromFile(sessionPassword?: string | null): Promise<string | null> {
+export async function pickDatabaseFile(): Promise<string | null> {
   const selectedPath = await open({
     filters: [{
       name: 'OneFileFinance',
@@ -49,9 +49,16 @@ export async function openDatabaseFromFile(sessionPassword?: string | null): Pro
     multiple: false
   });
 
+  if (!selectedPath) return null;
+  return selectedPath as string;
+}
+
+export async function openDatabaseFromFile(sessionPassword?: string | null): Promise<string | null> {
+  const selectedPath = await pickDatabaseFile();
+
   if (!selectedPath) return null; // user cancelled
 
-  return await openDatabaseFromPath(selectedPath as string, sessionPassword);
+  return await openDatabaseFromPath(selectedPath, sessionPassword);
 }
 
 export async function openDatabaseFromPath(targetPath: string, sessionPassword?: string | null): Promise<string> {
