@@ -64,7 +64,15 @@ export const encryptData = async (text: string, password: string): Promise<strin
   packed.set(iv, salt.length);
   packed.set(cipherBytes, salt.length + iv.length);
   
-  return 'OFF_ENC::' + btoa(String.fromCharCode(...packed));
+  // Convert chunks to avoid "Maximum call stack size exceeded" on large arrays
+  const CHUNK_SIZE = 8192;
+  let binary = "";
+  for (let i = 0; i < packed.length; i += CHUNK_SIZE) {
+    const chunk = packed.subarray(i, i + CHUNK_SIZE);
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  
+  return 'OFF_ENC::' + btoa(binary);
 };
 
 export const decryptData = async (encryptedData: string, password: string): Promise<string> => {

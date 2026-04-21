@@ -23,7 +23,10 @@ export async function saveDatabaseToFile(filePath?: string | null, sessionPasswo
   let text = await generateExportData();
 
   const encryptEnabled = await db.settings.get('fileEncryptionEnabled').then(r => r?.value);
-  if (encryptEnabled && sessionPassword) {
+  if (encryptEnabled) {
+      if (!sessionPassword) {
+          throw new Error("Cannot save file: Encryption is enabled but session password is missing.");
+      }
       text = await encryptData(text, sessionPassword);
   }
 
@@ -48,14 +51,26 @@ export async function openDatabaseFromFile(sessionPassword?: string | null): Pro
 
   if (!selectedPath) return null; // user cancelled
 
-  const targetPath = selectedPath as string;
+  return await openDatabaseFromPath(selectedPath as string, sessionPassword);
+}
+
+export async function openDatabaseFromPath(targetPath: string, sessionPassword?: string | null): Promise<string> {
   let text = await invoke<string>('read_file_direct', { path: targetPath });
   
   if (text.startsWith('OFF_ENC::')) {
       if (!sessionPassword) {
-          throw new Error('FILE_ENCRYPTED'); // Frontend will need to catch this or it fails gracefully
+          const err: any = new Error('FILE_ENCRYPTED');
+          err.path = targetPath;
+          throw err;
       }
-      text = await decryptData(text, sessionPassword);
+      try {
+        text = await decryptData(text, sessionPassword);
+      } catch (e: any) {
+        if (e.message === 'VERIFICATION_FAILED') {
+          e.path = targetPath;
+        }
+        throw e;
+      }
   }
 
   // Import using shared backend logic

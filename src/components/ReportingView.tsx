@@ -37,6 +37,11 @@ export function ReportingView() {
     return formatAmount(Math.round(amount), homeCurrency, numberFormat, 0);
   };
 
+  const formatExactAmount = (amount: number, hideZero = false) => {
+    if (hideZero && amount === 0) return '';
+    return formatAmount(amount, homeCurrency, numberFormat, 2);
+  };
+
   const metrics = useMemo(() => {
     if (!transactions) return null;
 
@@ -139,6 +144,7 @@ export function ReportingView() {
           categories={categories} 
           accounts={accounts}
           formatRoundedAmount={formatRoundedAmount} 
+          formatExactAmount={formatExactAmount}
           compactView={compactView} 
           initialFilters={initialCategoryDetailsFilter}
         />

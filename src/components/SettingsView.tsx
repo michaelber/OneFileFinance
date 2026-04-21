@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import { hashPassword, generateSaltHex, encryptData, decryptData } from '../lib/crypto';
 import { generateExportData, processImportData } from '../lib/backup';
+import { saveDatabaseToFile } from '../lib/fileHandling';
 
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
   const [isConfirming, setIsConfirming] = useState(false);
@@ -1989,6 +1990,15 @@ export function SettingsView({
       
       await db.settings.put({ key: 'appPasswordHash', value: hash, updated_at: Date.now() });
       await db.settings.put({ key: 'appPasswordSalt', value: salt, updated_at: Date.now() });
+
+      try {
+        const currentFilePath = settings?.find(s => s.key === 'currentFilePath')?.value;
+        if (currentFilePath && (window as any).__TAURI_INTERNALS__) {
+          await saveDatabaseToFile(currentFilePath, newPassword);
+        }
+      } catch (e: any) {
+        console.error("Save after password change failed", e);
+      }
       
       setSecuritySuccessMessage('Password successfully updated');
       setShowPasswordSetup(false);
@@ -2006,6 +2016,16 @@ export function SettingsView({
     await db.settings.delete('appPasswordHash');
     await db.settings.delete('appPasswordSalt');
     await db.settings.put({ key: 'fileEncryptionEnabled', value: false, updated_at: Date.now() });
+
+    try {
+      const currentFilePath = settings?.find(s => s.key === 'currentFilePath')?.value;
+      if (currentFilePath && (window as any).__TAURI_INTERNALS__) {
+        await saveDatabaseToFile(currentFilePath, null);
+      }
+    } catch (e: any) {
+      console.error("Save after password removal failed", e);
+    }
+
     setSecuritySuccessMessage('Password protection removed');
     setTimeout(() => setSecuritySuccessMessage(null), 5000);
     setTimeout(() => window.location.reload(), 1000); // Reload App
@@ -2502,7 +2522,18 @@ export function SettingsView({
                       </div>
                       <div className="flex items-center gap-3 cursor-pointer group">
                         <div 
-                          onClick={() => updateSetting('fileEncryptionEnabled', !isEncryptionEnabled)}
+                          onClick={async () => {
+                            const newVal = !isEncryptionEnabled;
+                            await updateSetting('fileEncryptionEnabled', newVal);
+                            try {
+                              const currentFilePath = settings?.find(s => s.key === 'currentFilePath')?.value;
+                              if (currentFilePath && (window as any).__TAURI_INTERNALS__) {
+                                await saveDatabaseToFile(currentFilePath, sessionPassword);
+                              }
+                            } catch (e: any) {
+                              alert("Could not update file with new encryption setting: " + (e.message || 'unknown error'));
+                            }
+                          }}
                           className={cn(
                             "w-10 h-5 rounded-full transition-colors relative",
                             isEncryptionEnabled ? "bg-accent" : "bg-slate-300 dark:bg-slate-700"

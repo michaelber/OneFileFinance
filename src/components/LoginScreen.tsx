@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { db } from '../db';
 import { hashPassword } from '../lib/crypto';
-import { Lock, AlertCircle } from 'lucide-react';
+import { Lock, AlertCircle, File, FolderOpen } from 'lucide-react';
 
 interface LoginScreenProps {
   onLogin: (password: string) => void;
+  currentFilePath?: string | null;
+  pendingFilePath?: string | null;
+  onOpenFile?: (password: string) => Promise<void>;
+  onUnlockPending?: (password: string) => Promise<void>;
 }
 
-export function LoginScreen({ onLogin }: LoginScreenProps) {
+export function LoginScreen({ onLogin, currentFilePath, pendingFilePath, onOpenFile, onUnlockPending }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,6 +22,16 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     setError('');
 
     try {
+      if (pendingFilePath && onUnlockPending) {
+         try {
+            await onUnlockPending(password);
+         } catch(err: any) {
+            setError(err.message === 'VERIFICATION_FAILED' ? 'Incorrect password for this file' : 'Failed to decrypt file');
+         }
+         setLoading(false);
+         return;
+      }
+
       const hashObj = await db.settings.get('appPasswordHash');
       const saltObj = await db.settings.get('appPasswordSalt');
 
@@ -51,7 +65,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           />
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">OneFileFinance</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 text-center">
-            This app is password protected
+            {pendingFilePath ? `Enter password to decrypt the selected file` : `This app is password protected`}
           </p>
         </div>
 
@@ -86,6 +100,52 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             {loading ? 'Verifying...' : 'Unlock'}
           </button>
         </form>
+
+        {currentFilePath && (
+          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 mb-4 text-slate-500 dark:text-slate-400">
+              <File className="w-4 h-4" />
+              <div className="text-xs truncate" title={currentFilePath}>
+                {/* Keep path mostly hidden unless hovered, or just show last part */}
+                <span className="font-semibold">Linked File:</span> {currentFilePath.split(/[\\/]/).pop()}
+              </div>
+            </div>
+            
+            {(window as any).__TAURI_INTERNALS__ && onOpenFile && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoading(true);
+                  // We try to open another file. The prompt asks for file, 
+                  // but if it's encrypted, it'll use the typed password to decrypt.
+                  await onOpenFile(password);
+                  setLoading(false);
+                }}
+                className="w-full py-2 px-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <FolderOpen className="w-4 h-4" />
+                Open different file...
+              </button>
+            )}
+          </div>
+        )}
+        
+        {!currentFilePath && !pendingFilePath && (window as any).__TAURI_INTERNALS__ && onOpenFile && (
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={async () => {
+                setLoading(true);
+                await onOpenFile(password);
+                setLoading(false);
+              }}
+              className="w-full py-2 px-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Open existing file...
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -793,7 +793,7 @@ export function CategoriesTab({ transactions, categories, accounts, formatRounde
   );
 }
 
-export function CategoryDetailsTab({ transactions, categories, accounts, formatRoundedAmount, compactView, initialFilters }: any) {
+export function CategoryDetailsTab({ transactions, categories, accounts, formatRoundedAmount, formatExactAmount, compactView, initialFilters }: any) {
   const [selectedCategory, setSelectedCategory] = useState<string>(initialFilters?.categoryId || 'all');
   const [selectedAccount, setSelectedAccount] = useState<string>(initialFilters?.accountId || 'all');
   const [startDate, setStartDate] = useState<string>('');
@@ -1001,7 +1001,7 @@ export function CategoryDetailsTab({ transactions, categories, accounts, formatR
                     {group.transactions[0].description}
                   </td>
                   <td className={cn("px-6 text-right font-medium", compactView ? "py-2" : "py-4", group.total < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
-                    {formatRoundedAmount(group.total)}
+                    {formatExactAmount(group.total)}
                   </td>
                   <td className={cn("px-6 text-slate-500 dark:text-slate-400 text-sm", compactView ? "py-2" : "py-4")}>
                     {categories?.find((c: any) => c.id === group.transactions[0].category_id)?.name || 'Uncategorized'}
@@ -1024,7 +1024,7 @@ export function CategoryDetailsTab({ transactions, categories, accounts, formatR
                       {group.keyword}
                     </td>
                     <td className={cn("px-6 text-right font-medium", compactView ? "py-2" : "py-4", group.total < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
-                      {formatRoundedAmount(group.total)}
+                      {formatExactAmount(group.total)}
                     </td>
                     <td className={cn("px-6", compactView ? "py-2" : "py-4")}></td>
                     <td className={cn("px-6", compactView ? "py-2" : "py-4")}></td>
@@ -1039,7 +1039,7 @@ export function CategoryDetailsTab({ transactions, categories, accounts, formatR
                         {t.description}
                       </td>
                       <td className={cn("px-6 text-right", compactView ? "py-1.5" : "py-2", t.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
-                        {formatRoundedAmount(t.amount)}
+                        {formatExactAmount(t.amount)}
                       </td>
                       <td className={cn("px-6 text-slate-500 dark:text-slate-400 text-sm", compactView ? "py-1.5" : "py-2")}>
                         {categories?.find((c: any) => c.id === t.category_id)?.name || 'Uncategorized'}
@@ -1059,7 +1059,7 @@ export function CategoryDetailsTab({ transactions, categories, accounts, formatR
               <tr>
                 <td className={cn("px-6 text-slate-900 dark:text-slate-100", compactView ? "py-2" : "py-4")}>Total</td>
                 <td className={cn("px-6 text-right", compactView ? "py-2" : "py-4")}>
-                  {formatRoundedAmount(groupedData.reduce((sum, g) => sum + g.total, 0))}
+                  {formatExactAmount(groupedData.reduce((sum: number, g: any) => sum + g.total, 0))}
                 </td>
                 <td colSpan={2} className={cn("px-6 text-right text-slate-900 dark:text-slate-100", compactView ? "py-2" : "py-4")}></td>
                 <td className={cn("px-6 text-right text-slate-900 dark:text-slate-100", compactView ? "py-2" : "py-4")}>

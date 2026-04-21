@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { TrendingUp, TrendingDown, Wallet, PieChart, Save } from 'lucide-react';
 import { cn } from './lib/utils';
 import { processRecurringTransactions } from './services/recurringService';
-import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile } from './lib/fileHandling';
+import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile, openDatabaseFromPath } from './lib/fileHandling';
 import { encryptData } from './lib/crypto';
 import { StatusBar } from './components/StatusBar';
 
@@ -24,6 +24,7 @@ export default function App() {
   const [view, setView] = useState<'dashboard' | 'settings' | 'recurring' | 'import' | 'reporting'>('dashboard');
   const [newTransactionIds, setNewTransactionIds] = useState<number[]>([]);
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
+  const [pendingFilePath, setPendingFilePath] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [addedRecurringCount, setAddedRecurringCount] = useState(0);
   const [importedCount, setImportedCount] = useState(0);
@@ -76,7 +77,7 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         isDirty = false; // Prevent auto-save from double saving immediately
-        handleSave();
+        handleSave(false);
       }
     };
     
@@ -86,7 +87,7 @@ export default function App() {
     const interval = setInterval(() => {
       if (isDirty && currentFilePath) {
         isDirty = false;
-        handleSave();
+        handleSave(true);
       }
     }, 60000);
 
@@ -108,7 +109,7 @@ export default function App() {
     };
   }, [currentFilePath, sessionPassword]);
 
-  const handleSave = async () => {
+  const handleSave = async (isAutoSave = false) => {
     if (!(window as any).__TAURI_INTERNALS__) return;
     setSaveStatus('saving');
     try {
@@ -121,8 +122,11 @@ export default function App() {
       } else {
         setSaveStatus('unsaved');
       }
-    } catch(err) {
+    } catch(err: any) {
       console.error("Save failed", err);
+      if (!isAutoSave) {
+        alert("Could not save the file: " + (err.message || 'unknown error'));
+      }
       setSaveStatus('unsaved');
     }
   };
@@ -139,8 +143,9 @@ export default function App() {
       } else {
         setSaveStatus('unsaved');
       }
-    } catch(err) {
+    } catch(err: any) {
       console.error("Save failed", err);
+      alert("Could not save the file: " + (err.message || 'unknown error'));
       setSaveStatus('unsaved');
     }
   };
@@ -152,12 +157,20 @@ export default function App() {
         setCurrentFilePath(path);
         await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
         setSaveStatus('saved');
+        const hashObj = await db.settings.get('appPasswordHash');
+        if (!hashObj?.value) {
+            setSessionPassword(null);
+            setAuthStatus('authorized');
+        } else {
+            setAuthStatus('authorized');
+        }
       }
     } catch(err: any) {
       console.error("Open failed", err);
-      if (err.message === 'FILE_ENCRYPTED' || err.message === 'VERIFICATION_FAILED') {
-          // In a real flow, if currently missing an active session, prompt for pwd
-          alert("Could not open file. Password is incorrect or file is encrypted and no password set.");
+      if ((err.message === 'FILE_ENCRYPTED' || err.message === 'VERIFICATION_FAILED') && err.path) {
+          // Link it and jump to login screen
+          setPendingFilePath(err.path);
+          setAuthStatus('unauthorized');
       } else {
           alert("Failed to open the file due to an error.");
       }
@@ -286,10 +299,63 @@ export default function App() {
   if (authStatus === 'checking') return null;
 
   if (authStatus === 'unauthorized') {
-    return <LoginScreen onLogin={(pwd) => {
-      setSessionPassword(pwd);
-      setAuthStatus('authorized');
-    }} />;
+    return <LoginScreen 
+      onLogin={(pwd) => {
+        setSessionPassword(pwd);
+        setAuthStatus('authorized');
+      }} 
+      currentFilePath={currentFilePath}
+      pendingFilePath={pendingFilePath}
+      onUnlockPending={async (pwd) => {
+         if (!pendingFilePath) return;
+         try {
+             const path = await openDatabaseFromPath(pendingFilePath, pwd);
+             setCurrentFilePath(path);
+             await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
+             setSaveStatus('saved');
+             
+             const hashObj = await db.settings.get('appPasswordHash');
+             if (!hashObj?.value) {
+                 setSessionPassword(null);
+             } else {
+                 setSessionPassword(pwd);
+             }
+             setPendingFilePath(null);
+             setAuthStatus('authorized');
+         } catch (e) {
+             throw e; // LoginScreen will catch and display error
+         }
+      }}
+      onOpenFile={async (password) => {
+        try {
+          const path = await openDatabaseFromFile(password);
+          if (path) {
+            setCurrentFilePath(path);
+            await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
+            setSaveStatus('saved');
+            // Check auth again because the restored file might have a new password hash
+            const hashObj = await db.settings.get('appPasswordHash');
+            if (!hashObj?.value) {
+                // if it has no password, let them right in
+                setSessionPassword(null);
+                setAuthStatus('authorized');
+            } else {
+                // If we got here, they successfully opened and decrypted the file with the password provided
+                setSessionPassword(password);
+                setAuthStatus('authorized');
+            }
+          }
+        } catch(err: any) {
+          console.error("Open failed", err);
+          if ((err.message === 'FILE_ENCRYPTED' || err.message === 'VERIFICATION_FAILED') && err.path) {
+              setPendingFilePath(err.path);
+              setAuthStatus('unauthorized');
+          } else {
+              alert("Failed to open the file due to an error.");
+          }
+        }
+      }}
+    />;
   }
 
   return (
