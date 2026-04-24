@@ -97,11 +97,18 @@ export function SavingsRateTab({ transactions, categories, metrics, formatRounde
     let validTxs = transactions;
     if (categories) {
       const todayStr = new Date().toISOString().split('T')[0];
-      const excludedCategoryIds = new Set(
+      const futureExcludedCategoryIds = new Set(
         categories.filter((cat: any) => cat.icon === 'CapitalGains' || cat.icon === 'SeverancePay').map((cat: any) => cat.id)
       );
+      const entirelyExcludedCategoryIds = new Set(
+        categories.filter((cat: any) => cat.icon === 'OpeningBalance').map((cat: any) => cat.id)
+      );
+      
       validTxs = transactions.filter((t: any) => {
-        if (t.category_id && excludedCategoryIds.has(t.category_id) && t.date > todayStr) {
+        if (t.category_id && entirelyExcludedCategoryIds.has(t.category_id)) {
+          return false;
+        }
+        if (t.category_id && futureExcludedCategoryIds.has(t.category_id) && t.date > todayStr) {
           return false;
         }
         return true;

@@ -79,12 +79,18 @@ export const calculateIncome = (transactions: Transaction[], categories?: Catego
   
   if (categories) {
     const todayStr = new Date().toISOString().split('T')[0];
-    const excludedCategoryIds = new Set(
+    const futureExcludedCategoryIds = new Set(
       categories.filter(cat => cat.icon === 'CapitalGains' || cat.icon === 'SeverancePay').map(cat => cat.id)
+    );
+    const entirelyExcludedCategoryIds = new Set(
+      categories.filter(cat => cat.icon === 'OpeningBalance').map(cat => cat.id)
     );
 
     validTransactions = transactions.filter(t => {
-      if (t.category_id && excludedCategoryIds.has(t.category_id) && t.date > todayStr) {
+      if (t.category_id && entirelyExcludedCategoryIds.has(t.category_id)) {
+        return false;
+      }
+      if (t.category_id && futureExcludedCategoryIds.has(t.category_id) && t.date > todayStr) {
         return false;
       }
       return true;

@@ -112,7 +112,12 @@ export function TypeAheadSelect({ options, value, onChange, onKeyDown, onFocus, 
       }
       // After selection, move to next column
       if (onKeyDown) {
-        const simulatedEvent = { ...e, key: 'ArrowRight' };
+        const simulatedEvent = { 
+          ...e, 
+          key: 'ArrowRight',
+          preventDefault: () => e.preventDefault(),
+          stopPropagation: () => e.stopPropagation()
+        };
         onKeyDown(simulatedEvent as any);
       }
     } else if (e.key === 'ArrowRight') {
@@ -887,7 +892,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
 
   const handleCreateTransaction = async () => {
     const tx = newTransactionRef.current;
-    const finalAccountID = tx.account_id || accountId || (accounts?.[0]?.id || 0);
+    const finalAccountID = tx.account_id || accountId;
 
     if (!tx.description || !tx.amount || !tx.date || !finalAccountID) {
       setErrorNotification('Description, Amount, Date and Account are mandatory.');
@@ -995,10 +1000,15 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
           e.preventDefault();
           setFocusSource('keyboard');
           setActiveCell({ id: filteredTransactions[rowIndex + 1].id!, col: 0 });
-        } else if (id === 'new' && filteredTransactions.length > 0) {
+        } else if (id === 'new') {
           e.preventDefault();
           setFocusSource('keyboard');
-          setActiveCell({ id: filteredTransactions[0].id!, col: 0 });
+          if (isNewRowFilled) {
+            handleCreateTransaction();
+            setActiveCell({ id: 'new', col: 1 });
+          } else if (filteredTransactions.length > 0) {
+            setActiveCell({ id: filteredTransactions[0].id!, col: 0 });
+          }
         }
       }
     } else if (e.key === 'Enter') {

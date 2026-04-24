@@ -1225,6 +1225,32 @@ function CategoryTable() {
           </tbody>
         </table>
       </div>
+      <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/20 rounded-b-xl text-sm">
+        <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">Icons with special functionality</h4>
+        <ul className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <li className="flex items-start gap-2">
+            <div className="mt-0.5">{ICON_MAP['OpeningBalance']}</div>
+            <div>
+              <span className="font-medium text-slate-700 dark:text-slate-300">Opening Balance</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Used for initial account setups. Not calculated as income in reports.</p>
+            </div>
+          </li>
+          <li className="flex items-start gap-2">
+            <div className="mt-0.5">{ICON_MAP['SeverancePay']}</div>
+            <div>
+              <span className="font-medium text-slate-700 dark:text-slate-300">Severance Pay</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Part of net worth, but not added to income if transactions are in the future.</p>
+            </div>
+          </li>
+          <li className="flex items-start gap-2">
+            <div className="mt-0.5">{ICON_MAP['CapitalGains']}</div>
+            <div>
+              <span className="font-medium text-slate-700 dark:text-slate-300">Capital Gains</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Capital gains are shown separately in reports.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
     </div>
   );
 }

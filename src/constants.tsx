@@ -4,7 +4,7 @@ import {
   PieChart, Coins, Building, Landmark, ShoppingBag, Utensils, 
   Car, Heart, Zap, Coffee, Smartphone, Music, Plane, Gift, 
   GraduationCap, Shield, Hammer, DollarSign, ArrowUpRight, 
-  ArrowDownLeft, Tag, Train, Book, Laptop, Monitor
+  ArrowDownLeft, Tag, Train, Book, Laptop, Monitor, Scale
 } from 'lucide-react';
 
 export const ICON_MAP: Record<string, React.ReactNode> = {
@@ -41,4 +41,5 @@ export const ICON_MAP: Record<string, React.ReactNode> = {
   'Monitor': <Monitor className="w-4 h-4" />,
   'CapitalGains': <TrendingUp className="w-4 h-4 text-blue-500" />,
   'SeverancePay': <Briefcase className="w-4 h-4 text-blue-500" />,
+  'OpeningBalance': <Scale className="w-4 h-4 text-blue-500" />,
 };
