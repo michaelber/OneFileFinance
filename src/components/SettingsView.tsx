@@ -61,6 +61,8 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
   useDroppable
 } from '@dnd-kit/core';
 import {
@@ -845,7 +847,7 @@ const SortableAccountRow: React.FC<{
   } = useSortable({ id: acc.id! });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     zIndex: isDragging ? 10 : 1,
     position: 'relative' as const,
@@ -858,7 +860,7 @@ const SortableAccountRow: React.FC<{
       className={cn(
         "group hover:bg-slate-50/50 dark:hover:bg-slate-800/20", 
         acc.is_archived && "opacity-50",
-        isDragging && "bg-blue-50 dark:bg-blue-900/20 shadow-lg"
+        isDragging && "bg-blue-50/50 dark:bg-blue-900/20 z-10 opacity-70"
       )}
     >
       <td className={cn("px-2 text-center cursor-grab active:cursor-grabbing", compactView ? "py-1" : "py-2")} {...attributes} {...listeners}>
@@ -1266,9 +1268,11 @@ function CategoryRuleTable() {
   const newRecordIdRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [applySuccess, setApplySuccess] = useState<string | null>(null);
   const prevActiveCellRef = useRef<{ id: number; col: number } | null>(null);
   const prevActiveRowIdRef = useRef<number | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  const [activeDragId, setActiveDragId] = useState<number | null>(null);
   
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
   const [bulkAddText, setBulkAddText] = useState('');
@@ -1398,30 +1402,78 @@ function CategoryRuleTable() {
         return;
       }
 
-      const oldIndex = sortedRules.findIndex(r => r.id === active.id);
-      const newIndex = sortedRules.findIndex(r => r.id === over.id);
-      
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newSorted = arrayMove(sortedRules, oldIndex, newIndex);
-
-        // Update category_id if moved to a different category group
-        const movedRule = newSorted[newIndex] as CategoryRule;
-        const targetRule = sortedRules[newIndex] as CategoryRule;
-        if (movedRule.category_id !== targetRule.category_id) {
-          movedRule.category_id = targetRule.category_id;
+      const globalOldIndex = sortedRules.findIndex(r => r.id === active.id);
+      if (globalOldIndex !== -1) {
+        let newSorted = [...sortedRules];
+        const oldVisualIndex = visualRules.findIndex(r => r.id === active.id);
+        const newVisualIndex = visualRules.findIndex(r => r.id === over.id);
+        
+        newSorted.splice(globalOldIndex, 1);
+        
+        // Find over.id position in the NEW array
+        let insertIndex = newSorted.findIndex(r => r.id === over.id);
+        if (oldVisualIndex < newVisualIndex) {
+            insertIndex += 1;
         }
+
+        const targetRule = rules.find(r => r.id === over.id);
+        let newCategoryId = activeRule.category_id;
+        if (targetRule && activeRule.category_id !== targetRule.category_id) {
+          newCategoryId = targetRule.category_id;
+          setExpandedCategories(prev => new Set(prev).add(targetRule.category_id));
+        }
+
+        newSorted.splice(insertIndex, 0, { ...activeRule, category_id: newCategoryId });
 
         await db.transaction('rw', db.category_rules, async () => {
           for (let i = 0; i < newSorted.length; i++) {
             const rule = newSorted[i] as CategoryRule;
             await db.category_rules.update(rule.id!, { 
               priority: i, 
-              category_id: rule.category_id,
+              category_id: rule.id === activeRule.id ? newCategoryId : rule.category_id,
               updated_at: Date.now() 
             });
           }
         });
       }
+    }
+  };
+
+  const handleApplyRules = async () => {
+    try {
+      setError(null);
+      setApplySuccess(null);
+      const allTransactions = await db.transactions.toArray();
+      const uncategorized = allTransactions.filter(t => !t.category_id);
+      const allRules = await db.category_rules.orderBy('priority').toArray();
+      
+      if (uncategorized.length === 0 || allRules.length === 0) {
+        setApplySuccess('No uncategorized transactions to match.');
+        setTimeout(() => setApplySuccess(null), 3000);
+        return;
+      }
+
+      let appliedCount = 0;
+      await db.transaction('rw', db.transactions, async () => {
+        for (const transaction of uncategorized) {
+          for (const rule of allRules) {
+            if (transaction.description.toLowerCase().includes(rule.search_value.toLowerCase())) {
+              await db.transactions.update(transaction.id!, {
+                category_id: rule.category_id,
+                updated_at: Date.now()
+              });
+              appliedCount++;
+              break;
+            }
+          }
+        }
+      });
+      setApplySuccess(`Applied rules to ${appliedCount} transactions.`);
+      setTimeout(() => setApplySuccess(null), 3000);
+    } catch (err) {
+      console.error("Failed to apply rules:", err);
+      setError("Failed to apply rules.");
+      setTimeout(() => setError(null), 3000);
     }
   };
 
@@ -1670,13 +1722,28 @@ function CategoryRuleTable() {
           <Zap className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Auto-Categorization Rules</h3>
         </div>
-        <button 
-          onClick={() => setIsBulkAddOpen(true)} 
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg text-xs font-bold transition-colors shadow-sm border border-blue-100 dark:border-blue-800/50"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Bulk Add Rules
-        </button>
+        <div className="flex items-center gap-2">
+          {applySuccess && (
+            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-md animate-fade-in mr-2">
+              {applySuccess}
+            </span>
+          )}
+          <button 
+            onClick={handleApplyRules} 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg text-xs font-bold transition-colors shadow-sm border border-emerald-100 dark:border-emerald-800/50"
+            title="Apply rules to uncategorized transactions"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Apply rules to uncategorized transactions
+          </button>
+          <button 
+            onClick={() => setIsBulkAddOpen(true)} 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg text-xs font-bold transition-colors shadow-sm border border-blue-100 dark:border-blue-800/50"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Bulk Add Rules
+          </button>
+        </div>
       </div>
       <div className="">
         <DndContext 
@@ -1695,7 +1762,7 @@ function CategoryRuleTable() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               <SortableContext 
-                items={sortedRules.map(r => (r as CategoryRule).id!)}
+                items={visualRules.map(r => (r as CategoryRule).id!)}
                 strategy={verticalListSortingStrategy}
               >
                 {[...categories, { id: 0, name: 'Uncategorized' }].map((category) => {
@@ -1823,7 +1890,7 @@ const SortableRuleRow: React.FC<{
   } = useSortable({ id: rule.id! });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     zIndex: isDragging ? 10 : 1,
     position: 'relative' as const,
@@ -1835,17 +1902,18 @@ const SortableRuleRow: React.FC<{
       style={style}
       className={cn(
         "group hover:bg-slate-50/50 dark:hover:bg-slate-800/20",
-        isDragging && "bg-blue-50 dark:bg-blue-900/20 shadow-lg"
+        isDragging && "opacity-70"
       )}
     >
-      <td className={cn("px-2 text-center cursor-grab active:cursor-grabbing", compactView ? "py-1" : "py-2")} {...attributes} {...listeners}>
+      <td className={cn("w-12 px-2 text-center cursor-grab active:cursor-grabbing", compactView ? "py-1" : "py-2", isDragging && "relative z-50 bg-blue-50 dark:bg-blue-900/40 shadow border-y border-blue-200")} {...attributes} {...listeners}>
         <GripVertical className="w-4 h-4 text-slate-300 group-hover:text-slate-400" />
       </td>
       <td 
         className={cn(
-          "px-4",
+          "px-4 text-left w-full",
           compactView ? "py-1" : "py-2",
-          activeCell?.id === rule.id && activeCell?.col === 0 && "bg-white dark:bg-slate-800 z-10 ring-2 ring-inset ring-blue-500"
+          activeCell?.id === rule.id && activeCell?.col === 0 && "bg-white dark:bg-slate-800 z-10 ring-2 ring-inset ring-blue-500",
+          isDragging && "relative z-50 bg-blue-50 dark:bg-blue-900/40 shadow border-y border-blue-200"
         )}
         onClick={() => handleCellClick(rule.id!, 0)}
       >
@@ -1869,9 +1937,10 @@ const SortableRuleRow: React.FC<{
       </td>
       <td 
         className={cn(
-          "px-4",
+          "w-48 px-4",
           compactView ? "py-1" : "py-2",
-          activeCell?.id === rule.id && activeCell?.col === 1 && "bg-white dark:bg-slate-800 z-10 ring-2 ring-inset ring-blue-500"
+          activeCell?.id === rule.id && activeCell?.col === 1 && "bg-white dark:bg-slate-800 z-10 ring-2 ring-inset ring-blue-500",
+          isDragging && "relative z-50 bg-blue-50 dark:bg-blue-900/40 shadow border-y border-blue-200"
         )}
         onClick={() => handleCellClick(rule.id!, 1)}
       >
@@ -1907,7 +1976,7 @@ const SortableRuleRow: React.FC<{
           </div>
         )}
       </td>
-      <td className={cn("w-12 px-2 text-center", compactView ? "py-1" : "py-2")}>
+      <td className={cn("w-12 px-2 text-center", compactView ? "py-1" : "py-2", isDragging && "relative z-50 bg-blue-50 dark:bg-blue-900/40 shadow border-y border-blue-200")}>
         <DeleteButton onDelete={() => handleDelete(rule.id!)} />
       </td>
     </tr>
@@ -1919,13 +1988,15 @@ export function SettingsView({
   sessionPassword,
   onOpen, 
   onSave, 
-  onSaveAs 
+  onSaveAs,
+  onClearData 
 }: { 
   currentFilePath?: string | null, 
   sessionPassword?: string | null,
   onOpen?: () => void, 
   onSave?: () => void, 
-  onSaveAs?: () => void 
+  onSaveAs?: () => void,
+  onClearData?: () => void 
 } = {}) {
   const [activeTab, setActiveTab] = useState<'accounts' | 'categories' | 'automation' | 'ui' | 'data'>('accounts');
   const accountTypes = useLiveQuery(() => db.account_types.toArray()) || [];
@@ -1994,6 +2065,7 @@ export function SettingsView({
   };
 
   const [isConfirmingRestore, setIsConfirmingRestore] = useState(false);
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [showPasswordSetup, setShowPasswordSetup] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -2404,6 +2476,13 @@ export function SettingsView({
                           <Download className="w-4 h-4" />
                           Save As
                         </button>
+                        <button
+                          onClick={() => setIsConfirmingClear(true)}
+                          className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors rounded-lg flex-shrink-0"
+                          title="Clear All Data"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -2420,6 +2499,13 @@ export function SettingsView({
                         Import Data
                         <input type="file" accept=".fin,.json" className="hidden" onChange={handleRestore} />
                       </label>
+                      <button
+                        onClick={() => setIsConfirmingClear(true)}
+                        className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors rounded-lg flex-shrink-0 shadow-sm"
+                        title="Clear All Data"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </>
                   )}
                 </div>
@@ -2445,6 +2531,30 @@ export function SettingsView({
                       </button>
                       <button 
                         onClick={() => setIsConfirmingRestore(false)}
+                        className="px-4 py-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {isConfirmingClear && (
+                  <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/40 rounded-xl animate-fade-in">
+                    <p className="text-sm text-rose-800 dark:text-rose-400 font-medium mb-3">
+                      Are you sure you want to clear all data? This action cannot be undone and all data will be lost!
+                    </p>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setIsConfirmingClear(false);
+                          if (onClearData) onClearData();
+                        }}
+                        className="px-4 py-2 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-700 transition-colors"
+                      >
+                        Yes, Clear Everything
+                      </button>
+                      <button 
+                        onClick={() => setIsConfirmingClear(false)}
                         className="px-4 py-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
                       >
                         Cancel

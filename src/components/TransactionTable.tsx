@@ -1077,33 +1077,6 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
     }
   };
 
-  // Auto-categorization rule engine
-  useEffect(() => {
-    const applyRules = async () => {
-      const allTransactions = await db.transactions.toArray();
-      const uncategorized = allTransactions.filter(t => !t.category_id);
-      const rules = await db.category_rules.orderBy('priority').toArray();
-      
-      if (uncategorized.length === 0 || rules.length === 0) return;
-
-      for (const transaction of uncategorized) {
-        for (const rule of rules) {
-          if (transaction.description.toLowerCase().includes(rule.search_value.toLowerCase())) {
-            await db.transactions.update(transaction.id!, {
-              category_id: rule.category_id,
-              updated_at: Date.now()
-            });
-            break;
-          }
-        }
-      }
-    };
-    
-    if (transactions) {
-      applyRules();
-    }
-  }, [transactions]);
-
   const handleDescriptionBlur = (e: React.FocusEvent) => {
     // Check if the next focused element is within the table
     const nextTarget = e.relatedTarget as HTMLElement;

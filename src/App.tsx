@@ -177,6 +177,24 @@ export default function App() {
     }
   };
 
+  const handleClearData = async () => {
+    try {
+      await Promise.all([
+        db.transactions.clear(),
+        db.accounts.clear(),
+        db.categories.clear(),
+        db.category_rules.clear(),
+        db.account_types.clear(),
+        db.settings.clear(),
+        db.recurring_transactions.clear()
+      ]);
+      window.location.reload();
+    } catch(err: any) {
+      console.error("Clear data failed", err);
+      alert("Could not clear data: " + (err.message || 'unknown error'));
+    }
+  };
+
   React.useEffect(() => {
     if (view !== 'dashboard') {
       setNewTransactionIds([]);
@@ -427,6 +445,7 @@ export default function App() {
                 onOpen={handleOpen}
                 onSave={handleSave}
                 onSaveAs={handleSaveAs}
+                onClearData={handleClearData}
               />
             </div>
           </div>

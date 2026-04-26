@@ -257,6 +257,7 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
     const existingTransactions = selectedAccountId ? await db.transactions.where('account_id').equals(Number(selectedAccountId)).toArray() : await db.transactions.toArray();
     const allAccounts = await db.accounts.toArray();
     const allCategories = await db.categories.toArray();
+    const categoryRules = await db.category_rules.orderBy('priority').toArray();
     
     const dateIdx = currentParsedData.headers.indexOf(mapping.date);
     const amountIdx = currentParsedData.headers.indexOf(mapping.amount);
