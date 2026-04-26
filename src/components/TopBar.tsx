@@ -44,7 +44,7 @@ export function TopBar({ selectedAccountId, onSelectAccount, onSettingsClick, on
   return (
     <div className="h-16 bg-topbar border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm transition-colors duration-300">
       <div className="flex items-center gap-2 mr-8">
-        <img src="/favicon.svg" alt="OneFileFinance Logo" className="w-8 h-8" />
+        <img src="favicon.svg" alt="OneFileFinance Logo" className="w-8 h-8" />
         <span className="text-slate-900 dark:text-slate-100 font-bold text-lg tracking-tight hidden sm:block">OneFileFinance</span>
       </div>
 
