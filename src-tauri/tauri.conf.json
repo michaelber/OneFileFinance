@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "identifier": "com.onefilefinance.app",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../docs/dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"

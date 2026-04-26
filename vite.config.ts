@@ -6,6 +6,7 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
+    base: './',
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -22,6 +23,26 @@ export default defineConfig(({mode}) => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       strictPort: true,
+    },
+    build: {
+      outDir: 'docs/dist',
+      emptyOutDir: true,
+      chunkSizeWarningLimit: 5000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react')) return 'vendor-core';
+              if (id.includes('recharts') || id.includes('d3')) return 'vendor-viz';
+              if (id.includes('xlsx')) return 'vendor-xlsx';
+              if (id.includes('motion') || id.includes('framer-motion')) return 'vendor-animation';
+              if (id.includes('lucide')) return 'vendor-icons';
+              if (id.includes('lucide-react')) return 'vendor-icons';
+              return 'vendor';
+            }
+          },
+        },
+      },
     },
   };
 });

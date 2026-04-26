@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build && node -e \"require('fs').copyFileSync('dist/index.html', 'docs/demo_latest.html');\"",
+    "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf docs/dist",
     "lint": "tsc --noEmit",
     "tauri": "tauri"
   },
