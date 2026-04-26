@@ -32,12 +32,17 @@ export default defineConfig(({mode}) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              if (id.includes('react')) return 'vendor-core';
+              if (
+                id.includes('node_modules/react/') ||
+                id.includes('node_modules/react-dom/') ||
+                id.includes('node_modules/scheduler/')
+              ) {
+                return 'vendor-react';
+              }
               if (id.includes('recharts') || id.includes('d3')) return 'vendor-viz';
               if (id.includes('xlsx')) return 'vendor-xlsx';
               if (id.includes('motion') || id.includes('framer-motion')) return 'vendor-animation';
               if (id.includes('lucide')) return 'vendor-icons';
-              if (id.includes('lucide-react')) return 'vendor-icons';
               return 'vendor';
             }
           },
