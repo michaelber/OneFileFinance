@@ -299,7 +299,7 @@ export function RecurringTransactionsTable() {
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.toArray()) || [];
   const homeCurrency = settings?.find(s => s.key === 'homeCurrency')?.value || '€';
-  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'default';
+  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'space-comma';
   const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
 
   const [activeCell, setActiveCell] = useState<{ id: number | 'new'; col: number } | null>(null);

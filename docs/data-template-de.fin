@@ -1,0 +1,597 @@
+{
+  "transactions": [],
+  "accounts": [
+    {
+      "name": "Bargeld",
+      "account_type_id": 1,
+      "is_liquid": true,
+      "is_archived": false,
+      "show_in_top_bar": true,
+      "description": "Primary bank account",
+      "updated_at": 1777483580017,
+      "id": 1,
+      "order": 3
+    },
+    {
+      "name": "Bankkonto",
+      "account_type_id": 1,
+      "is_liquid": true,
+      "show_in_top_bar": true,
+      "is_archived": false,
+      "description": "",
+      "order": 0,
+      "updated_at": 1777483580008,
+      "id": 4
+    },
+    {
+      "name": "Sparbuch",
+      "type": "checking",
+      "order": 2,
+      "is_liquid": false,
+      "show_in_top_bar": true,
+      "archived": false,
+      "updated_at": 1777483580016,
+      "id": 13,
+      "account_type_id": 5
+    },
+    {
+      "name": "Cryptobörse",
+      "type": "checking",
+      "order": 4,
+      "is_liquid": false,
+      "show_in_top_bar": false,
+      "archived": false,
+      "updated_at": 1777483580018,
+      "id": 14,
+      "account_type_id": 4
+    },
+    {
+      "name": "Aktiendepot",
+      "type": "checking",
+      "order": 1,
+      "is_liquid": false,
+      "show_in_top_bar": true,
+      "archived": false,
+      "updated_at": 1777483580014,
+      "id": 16,
+      "account_type_id": 2
+    },
+    {
+      "name": "Immobilien",
+      "type": "checking",
+      "order": 6,
+      "is_liquid": false,
+      "show_in_top_bar": false,
+      "archived": false,
+      "updated_at": 1777483580021,
+      "id": 17,
+      "account_type_id": 3
+    },
+    {
+      "name": "Offene Posten (Forderungen)",
+      "type": "checking",
+      "order": 7,
+      "is_liquid": false,
+      "show_in_top_bar": false,
+      "archived": false,
+      "updated_at": 1777483580022,
+      "id": 18,
+      "account_type_id": 6
+    }
+  ],
+  "categories": [
+    {
+      "name": "Anlagenkauf",
+      "updated_at": 1776012367632,
+      "id": 5,
+      "icon": "Home"
+    },
+    {
+      "name": "tägliche Ausgaben",
+      "updated_at": 1776012373212,
+      "id": 6,
+      "icon": "Banknote"
+    },
+    {
+      "name": "Glücksspiel",
+      "updated_at": 1776278245918,
+      "id": 7,
+      "icon": "Zap"
+    },
+    {
+      "name": "Projekt/Auftrag",
+      "updated_at": 1776012397833,
+      "id": 8,
+      "icon": "Briefcase"
+    },
+    {
+      "name": "Geschenke",
+      "updated_at": 1776012406241,
+      "id": 9,
+      "icon": "Gift"
+    },
+    {
+      "name": "Kapitalertrag",
+      "updated_at": 1776276509401,
+      "id": 11,
+      "icon": "CapitalGains"
+    },
+    {
+      "name": "Handy",
+      "updated_at": 1776012422449,
+      "id": 12,
+      "icon": "Smartphone"
+    },
+    {
+      "name": "IT-Dienstleistungen",
+      "updated_at": 1776012490835,
+      "id": 14,
+      "icon": "Briefcase"
+    },
+    {
+      "name": "Anlagenverkauf",
+      "updated_at": 1776012483274,
+      "id": 15,
+      "icon": "Hammer"
+    },
+    {
+      "name": "Bonus/Gutschrift",
+      "updated_at": 1776012546493,
+      "id": 17,
+      "icon": "CreditCard"
+    },
+    {
+      "name": "Steuern/Finanzamt",
+      "updated_at": 1776012579028,
+      "id": 18,
+      "icon": "ArrowDownLeft"
+    },
+    {
+      "name": "Sport/Fitness",
+      "updated_at": 1776012588934,
+      "id": 19,
+      "icon": "Heart"
+    },
+    {
+      "name": "Software",
+      "updated_at": 1777483627630,
+      "id": 20,
+      "icon": "Laptop"
+    },
+    {
+      "name": "öffentliche Verkehrsmittel",
+      "updated_at": 1777483632601,
+      "id": 21,
+      "icon": "Train"
+    },
+    {
+      "name": "Gehalt",
+      "updated_at": 1776012690208,
+      "id": 22,
+      "icon": "Briefcase"
+    },
+    {
+      "name": "Urlaub",
+      "updated_at": 1776012701000,
+      "id": 23,
+      "icon": "Plane"
+    },
+    {
+      "name": "Kleidung",
+      "updated_at": 1776012709123,
+      "id": 24,
+      "icon": "ShoppingBag"
+    },
+    {
+      "name": "Konzertkarten",
+      "updated_at": 1776012720095,
+      "id": 25,
+      "icon": "Music"
+    },
+    {
+      "name": "Wohnung",
+      "updated_at": 1776012723178,
+      "id": 26,
+      "icon": "Home"
+    },
+    {
+      "name": "Ausgehen",
+      "updated_at": 1776012744726,
+      "id": 27,
+      "icon": "Wallet"
+    },
+    {
+      "name": "Bücher/Hörbücher",
+      "updated_at": 1776012755069,
+      "id": 28,
+      "icon": "Music"
+    },
+    {
+      "name": "Spesen",
+      "updated_at": 1776012779255,
+      "id": 29,
+      "icon": "ArrowDownLeft"
+    },
+    {
+      "name": "Gesundheit",
+      "updated_at": 1776012786868,
+      "id": 30,
+      "icon": "Heart"
+    },
+    {
+      "name": "Stipendium",
+      "updated_at": 1776012802633,
+      "id": 32,
+      "icon": "Wallet"
+    },
+    {
+      "name": "Versicherung",
+      "updated_at": 1776012813081,
+      "id": 33,
+      "icon": "Building"
+    },
+    {
+      "name": "Musik Streaming",
+      "updated_at": 1776012823356,
+      "id": 35,
+      "icon": "Music"
+    },
+    {
+      "name": "Anfangsbestand",
+      "updated_at": 1777027684422,
+      "id": 36,
+      "icon": "OpeningBalance"
+    },
+    {
+      "name": "Eigenübertrag",
+      "updated_at": 1776012882021,
+      "id": 37,
+      "icon": "Tag"
+    },
+    {
+      "name": "Abschreibung",
+      "updated_at": 1776012835146,
+      "id": 38,
+      "icon": "ArrowDownLeft"
+    },
+    {
+      "name": "Immobilien",
+      "updated_at": 1776012858321,
+      "id": 39,
+      "icon": "Home"
+    },
+    {
+      "name": "Abfertigung",
+      "updated_at": 1776276525150,
+      "id": 40,
+      "icon": "SeverancePay"
+    }
+  ],
+  "category_rules": [
+    {
+      "search_value": "Audible",
+      "category_id": 28,
+      "priority": 0,
+      "updated_at": 1777483806062,
+      "id": 3
+    },
+    {
+      "search_value": "Eigenübertrag",
+      "category_id": 37,
+      "priority": 1,
+      "updated_at": 1777483806073,
+      "id": 4
+    },
+    {
+      "search_value": "Übertrag",
+      "category_id": 37,
+      "priority": 2,
+      "updated_at": 1777483806076,
+      "id": 5
+    },
+    {
+      "search_value": "Ubertrag",
+      "category_id": 37,
+      "priority": 3,
+      "updated_at": 1777483822972,
+      "id": 6
+    },
+    {
+      "search_value": "Einzahlung",
+      "category_id": 37,
+      "priority": 4,
+      "updated_at": 1777483806079,
+      "id": 7
+    },
+    {
+      "search_value": "Gehalt",
+      "category_id": 22,
+      "priority": 5,
+      "updated_at": 1777483806080,
+      "id": 8
+    },
+    {
+      "search_value": "WIN2DAY",
+      "category_id": 7,
+      "priority": 6,
+      "updated_at": 1777483806081,
+      "id": 9
+    },
+    {
+      "search_value": "Handy",
+      "category_id": 12,
+      "priority": 7,
+      "updated_at": 1777483806082,
+      "id": 10
+    },
+    {
+      "search_value": "HOT TELEKOM",
+      "category_id": 12,
+      "priority": 8,
+      "updated_at": 1777483806084,
+      "id": 12
+    },
+    {
+      "search_value": "Zinsertrag",
+      "category_id": 11,
+      "priority": 9,
+      "updated_at": 1777483806085,
+      "id": 13
+    },
+    {
+      "search_value": "Spotify",
+      "category_id": 35,
+      "priority": 10,
+      "updated_at": 1777483806086,
+      "id": 14
+    },
+    {
+      "search_value": "OBB",
+      "category_id": 21,
+      "priority": 11,
+      "updated_at": 1777483806087,
+      "id": 15
+    },
+    {
+      "search_value": "westbahn.at",
+      "category_id": 21,
+      "priority": 12,
+      "updated_at": 1777483806087,
+      "id": 16
+    },
+    {
+      "search_value": "Zug",
+      "category_id": 21,
+      "priority": 13,
+      "updated_at": 1777483806088,
+      "id": 17
+    },
+    {
+      "search_value": "OEBB",
+      "category_id": 21,
+      "priority": 14,
+      "updated_at": 1777483806088,
+      "id": 18
+    },
+    {
+      "search_value": "Hofer",
+      "category_id": 6,
+      "priority": 15,
+      "updated_at": 1777483806089,
+      "id": 21
+    },
+    {
+      "search_value": "DM-Fil",
+      "category_id": 6,
+      "priority": 16,
+      "updated_at": 1777483806090,
+      "id": 22
+    },
+    {
+      "search_value": "Bankomat",
+      "category_id": 6,
+      "priority": 17,
+      "updated_at": 1777483806091,
+      "id": 23
+    },
+    {
+      "search_value": "ATM",
+      "category_id": 6,
+      "priority": 18,
+      "updated_at": 1777483806093,
+      "id": 24
+    },
+    {
+      "search_value": "RESTAURANTS",
+      "category_id": 6,
+      "priority": 19,
+      "updated_at": 1777483806094,
+      "id": 26
+    },
+    {
+      "search_value": "Billa",
+      "category_id": 6,
+      "priority": 20,
+      "updated_at": 1777483806095,
+      "id": 27
+    },
+    {
+      "search_value": "MUeLLER",
+      "category_id": 6,
+      "priority": 21,
+      "updated_at": 1777483806096,
+      "id": 29
+    },
+    {
+      "search_value": "BAWAG",
+      "category_id": 6,
+      "priority": 22,
+      "updated_at": 1777483806097,
+      "id": 30
+    },
+    {
+      "search_value": "SPAR",
+      "category_id": 6,
+      "priority": 23,
+      "updated_at": 1777483806097,
+      "id": 34
+    },
+    {
+      "search_value": "TGTG",
+      "category_id": 6,
+      "priority": 24,
+      "updated_at": 1777483806098,
+      "id": 35
+    },
+    {
+      "search_value": "Lidl",
+      "category_id": 6,
+      "priority": 25,
+      "updated_at": 1777483806099,
+      "id": 36
+    },
+    {
+      "search_value": "UniCredit Bank Austria",
+      "category_id": 6,
+      "priority": 26,
+      "updated_at": 1777483806099,
+      "id": 38
+    },
+    {
+      "search_value": "McDonalds",
+      "category_id": 6,
+      "priority": 27,
+      "updated_at": 1777483806100,
+      "id": 39
+    },
+    {
+      "search_value": "Urlaub",
+      "category_id": 23,
+      "priority": 28,
+      "updated_at": 1777483806100,
+      "id": 41
+    },
+    {
+      "search_value": "Heizung",
+      "category_id": 26,
+      "priority": 29,
+      "updated_at": 1777483806101,
+      "id": 42
+    },
+    {
+      "search_value": "Strom",
+      "category_id": 26,
+      "priority": 30,
+      "updated_at": 1777483806102,
+      "id": 43
+    },
+    {
+      "search_value": "Heizkosten",
+      "category_id": 26,
+      "priority": 31,
+      "updated_at": 1777483806102,
+      "id": 44
+    },
+    {
+      "search_value": "Wien Energie",
+      "category_id": 26,
+      "priority": 32,
+      "updated_at": 1777483806103,
+      "id": 46
+    },
+    {
+      "search_value": "EVN",
+      "category_id": 26,
+      "priority": 33,
+      "updated_at": 1777483806103,
+      "id": 47
+    },
+    {
+      "search_value": "Miete",
+      "category_id": 26,
+      "priority": 34,
+      "updated_at": 1777483806104,
+      "id": 51
+    },
+    {
+      "search_value": "Internet",
+      "category_id": 26,
+      "priority": 35,
+      "updated_at": 1777483806104,
+      "id": 52
+    }
+  ],
+  "account_types": [
+    {
+      "name": "Cash",
+      "icon": "Wallet",
+      "updated_at": 1775994917261,
+      "id": 1
+    },
+    {
+      "name": "Aktien",
+      "icon": "TrendingUp",
+      "updated_at": 1776014695329,
+      "id": 2
+    },
+    {
+      "name": "Immobilien",
+      "icon": "Home",
+      "updated_at": 1776014703207,
+      "id": 3
+    },
+    {
+      "name": "Crypto",
+      "icon": "Coins",
+      "updated_at": 1776109308564,
+      "id": 4
+    },
+    {
+      "name": "Festgeld",
+      "icon": "ArrowUpRight",
+      "updated_at": 1776109364099,
+      "id": 5
+    },
+    {
+      "name": "Offene Forderungen",
+      "icon": "Hammer",
+      "updated_at": 1776278137761,
+      "id": 6
+    }
+  ],
+  "recurring_transactions": [],
+  "settings": [
+    {
+      "key": "accentColor",
+      "value": "#2563eb",
+      "updated_at": 1776760425421
+    },
+    {
+      "key": "compactView",
+      "value": true,
+      "updated_at": 1776760548238
+    },
+    {
+      "key": "darkMode",
+      "value": false,
+      "updated_at": 1776760425422
+    },
+    {
+      "key": "fileEncryptionEnabled",
+      "value": false,
+      "updated_at": 1777483883791
+    },
+    {
+      "key": "numberFormat",
+      "value": "space-comma",
+      "updated_at": 1776760425422
+    },
+    {
+      "key": "topBarColor",
+      "value": "#f8fafc",
+      "updated_at": 1776760425422
+    }
+  ],
+  "version": 2,
+  "timestamp": 1777484004953
+}

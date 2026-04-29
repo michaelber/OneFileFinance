@@ -205,13 +205,13 @@ export default function App() {
   const transactions = useLiveQuery(() => db.transactions.toArray());
   const settings = useLiveQuery(() => db.settings.toArray());
   const homeCurrency = settings?.find(s => s.key === 'homeCurrency')?.value || '€';
-  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'default';
+  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'space-comma';
 
   // Apply UI settings
   React.useEffect(() => {
     if (settings) {
       const accentColor = settings.find(s => s.key === 'accentColor')?.value || '#2563eb';
-      const topBarColor = settings.find(s => s.key === 'topBarColor')?.value || '#ffffff';
+      const topBarColor = settings.find(s => s.key === 'topBarColor')?.value || '#f8fafc';
       const darkMode = settings.find(s => s.key === 'darkMode')?.value || false;
 
       // Ensure appropriate text contrast for the statusbar
@@ -269,46 +269,63 @@ export default function App() {
         setAddedRecurringCount(ids.length);
       }
 
-      const typeCount = await db.account_types.count();
-      let cashTypeId: number;
-      let stocksTypeId: number;
-
-      if (typeCount === 0) {
-        cashTypeId = await db.account_types.add({ name: 'Cash', icon: 'Wallet', updated_at: Date.now() }) as number;
-        stocksTypeId = await db.account_types.add({ name: 'Stocks', icon: 'TrendingUp', updated_at: Date.now() }) as number;
-        await db.account_types.add({ name: 'Real estate', icon: 'Home', updated_at: Date.now() });
-        await db.account_types.add({ name: 'Venture capital', icon: 'Briefcase', updated_at: Date.now() });
-      } else {
-        const types = await db.account_types.toArray();
-        cashTypeId = types.find(t => t.name === 'Cash')?.id || types[0].id!;
-        stocksTypeId = types.find(t => t.name === 'Stocks')?.id || types[0].id!;
-      }
-
       const accountCount = await db.accounts.count();
       if (accountCount === 0) {
-        const cashId = await db.accounts.add({
-          name: 'Main Checking',
-          account_type_id: cashTypeId,
-          is_liquid: true,
-          is_archived: false,
-          show_in_top_bar: true,
-          description: 'Primary bank account',
-          updated_at: Date.now()
-        });
+        // Seed Account Types
+        await db.account_types.bulkAdd([
+          { id: 1, name: 'Cash', icon: 'Wallet', updated_at: Date.now() },
+          { id: 2, name: 'Stocks', icon: 'TrendingUp', updated_at: Date.now() },
+          { id: 3, name: 'Real Estate', icon: 'Home', updated_at: Date.now() },
+          { id: 4, name: 'Crypto', icon: 'Coins', updated_at: Date.now() },
+          { id: 5, name: 'Fixed Deposit', icon: 'ArrowUpRight', updated_at: Date.now() },
+          { id: 6, name: 'Accounts Receivable', icon: 'Hammer', updated_at: Date.now() }
+        ]);
 
-        const stocksId = await db.accounts.add({
-          name: 'Investment Portfolio',
-          account_type_id: stocksTypeId,
-          is_liquid: false,
-          is_archived: false,
-          show_in_top_bar: true,
-          description: 'Stock market investments',
-          updated_at: Date.now()
-        });
+        // Seed Accounts
+        await db.accounts.bulkAdd([
+          { id: 1, name: 'Cash', account_type_id: 1, is_liquid: true, is_archived: false, show_in_top_bar: true, description: 'Primary bank account', order: 3, updated_at: Date.now() },
+          { id: 4, name: 'Bank Account', account_type_id: 1, is_liquid: true, show_in_top_bar: true, is_archived: false, description: '', order: 0, updated_at: Date.now() },
+          { id: 13, name: 'Savings Book', account_type_id: 5, order: 2, is_liquid: false, show_in_top_bar: true, is_archived: false, description: '', updated_at: Date.now() },
+          { id: 14, name: 'Crypto Exchange', account_type_id: 4, order: 4, is_liquid: false, show_in_top_bar: false, is_archived: false, description: '', updated_at: Date.now() },
+          { id: 16, name: 'Stock Portfolio', account_type_id: 2, order: 1, is_liquid: false, show_in_top_bar: true, is_archived: false, description: '', updated_at: Date.now() },
+          { id: 17, name: 'Real Estate', account_type_id: 3, order: 6, is_liquid: false, show_in_top_bar: false, is_archived: false, description: '', updated_at: Date.now() },
+          { id: 18, name: 'Accounts Receivable', account_type_id: 6, order: 7, is_liquid: false, show_in_top_bar: false, is_archived: false, description: '', updated_at: Date.now() }
+        ]);
 
-        const foodCatId = await db.categories.add({ name: 'Food & Dining', updated_at: Date.now() });
-        const transportCatId = await db.categories.add({ name: 'Transportation', updated_at: Date.now() });
-        const salaryCatId = await db.categories.add({ name: 'Salary', updated_at: Date.now() });
+        // Seed Categories
+        await db.categories.bulkAdd([
+          { id: 5, name: 'Asset Purchase', icon: 'Home', updated_at: Date.now() },
+          { id: 6, name: 'Daily Expenses', icon: 'Banknote', updated_at: Date.now() },
+          { id: 7, name: 'Gambling', icon: 'Zap', updated_at: Date.now() },
+          { id: 8, name: 'Project/Contract', icon: 'Briefcase', updated_at: Date.now() },
+          { id: 9, name: 'Gifts', icon: 'Gift', updated_at: Date.now() },
+          { id: 11, name: 'Capital Gains', icon: 'CapitalGains', updated_at: Date.now() },
+          { id: 12, name: 'Mobile Phone', icon: 'Smartphone', updated_at: Date.now() },
+          { id: 14, name: 'IT Services', icon: 'Briefcase', updated_at: Date.now() },
+          { id: 15, name: 'Asset Sale', icon: 'Hammer', updated_at: Date.now() },
+          { id: 17, name: 'Bonus/Credit', icon: 'CreditCard', updated_at: Date.now() },
+          { id: 18, name: 'Taxes/Revenue', icon: 'ArrowDownLeft', updated_at: Date.now() },
+          { id: 19, name: 'Sports/Fitness', icon: 'Heart', updated_at: Date.now() },
+          { id: 20, name: 'Software', icon: 'Laptop', updated_at: Date.now() },
+          { id: 21, name: 'Public Transport', icon: 'Train', updated_at: Date.now() },
+          { id: 22, name: 'Salary', icon: 'Briefcase', updated_at: Date.now() },
+          { id: 23, name: 'Vacation', icon: 'Plane', updated_at: Date.now() },
+          { id: 24, name: 'Clothing', icon: 'ShoppingBag', updated_at: Date.now() },
+          { id: 25, name: 'Concert Tickets', icon: 'Music', updated_at: Date.now() },
+          { id: 26, name: 'Apartment/Housing', icon: 'Home', updated_at: Date.now() },
+          { id: 27, name: 'Going Out', icon: 'Wallet', updated_at: Date.now() },
+          { id: 28, name: 'Books/Audiobooks', icon: 'Music', updated_at: Date.now() },
+          { id: 29, name: 'Expenses', icon: 'ArrowDownLeft', updated_at: Date.now() },
+          { id: 30, name: 'Health', icon: 'Heart', updated_at: Date.now() },
+          { id: 32, name: 'Scholarship', icon: 'Wallet', updated_at: Date.now() },
+          { id: 33, name: 'Insurance', icon: 'Building', updated_at: Date.now() },
+          { id: 35, name: 'Music Streaming', icon: 'Music', updated_at: Date.now() },
+          { id: 36, name: 'Opening Balance', icon: 'OpeningBalance', updated_at: Date.now() },
+          { id: 37, name: 'Account Transfer', icon: 'Tag', updated_at: Date.now() },
+          { id: 38, name: 'Depreciation', icon: 'ArrowDownLeft', updated_at: Date.now() },
+          { id: 39, name: 'Real Estate Exp.', icon: 'Home', updated_at: Date.now() },
+          { id: 40, name: 'Severance Pay', icon: 'SeverancePay', updated_at: Date.now() }
+        ]);
       }
     };
     seedData();

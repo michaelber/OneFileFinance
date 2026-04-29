@@ -73,7 +73,7 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
   const categoryRules = useLiveQuery(() => db.category_rules.toArray());
   const settings = useLiveQuery(() => db.settings.toArray());
   
-  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'default';
+  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'space-comma';
 
   // Load saved mapping
   useEffect(() => {

@@ -21,7 +21,7 @@ export function ReportingView() {
   const settings = useLiveQuery(() => db.settings.toArray());
 
   const homeCurrency = settings?.find(s => s.key === 'homeCurrency')?.value || '€';
-  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'default';
+  const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'space-comma';
   const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
 
   const [activeTab, setActiveTab] = useState<'netWorth' | 'categories' | 'savingsRate' | 'accounts' | 'categoryDetails'>('netWorth');

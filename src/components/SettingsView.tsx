@@ -516,7 +516,7 @@ function AccountTable() {
   const accounts = useLiveQuery(() => db.accounts.toArray()) || [];
   const accountTypes = useLiveQuery(() => db.account_types.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.toArray());
-  const compactView = settings?.find(s => s.key === 'compactView')?.value || false;
+  const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
   const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
   const [selectionTrigger, setSelectionTrigger] = useState<'mouse' | 'keyboard' | null>(null);
   const idToFocusRef = useRef<number | null>(null);
@@ -961,7 +961,7 @@ const SortableAccountRow: React.FC<{
 function CategoryTable() {
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.toArray());
-  const compactView = settings?.find(s => s.key === 'compactView')?.value || false;
+  const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
   const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
   const [selectionTrigger, setSelectionTrigger] = useState<'mouse' | 'keyboard' | null>(null);
   const idToFocusRef = useRef<number | null>(null);
@@ -1261,7 +1261,7 @@ function CategoryRuleTable() {
   const rules = useLiveQuery(() => db.category_rules.toArray()) || [];
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.toArray());
-  const compactView = settings?.find(s => s.key === 'compactView')?.value || false;
+  const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
   const [activeCell, setActiveCell] = useState<{ id: number; col: number } | null>(null);
   const [selectionTrigger, setSelectionTrigger] = useState<'mouse' | 'keyboard' | null>(null);
   const idToFocusRef = useRef<number | null>(null);
@@ -2010,10 +2010,10 @@ export function SettingsView({
   };
 
   const accentColor = settings?.find(s => s.key === 'accentColor')?.value || '#2563eb';
-  const topBarColor = settings?.find(s => s.key === 'topBarColor')?.value || '#ffffff';
+  const topBarColor = settings?.find(s => s.key === 'topBarColor')?.value || '#f8fafc';
   const homeCurrency = settings?.find(s => s.key === 'homeCurrency')?.value || '€';
   const darkMode = settings?.find(s => s.key === 'darkMode')?.value || false;
-  const compactView = settings?.find(s => s.key === 'compactView')?.value || false;
+  const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
   
   const handleBackup = async () => {
     try {
@@ -2300,7 +2300,7 @@ export function SettingsView({
                       <p className="text-xs text-slate-500 dark:text-slate-400">How amounts are displayed</p>
                     </div>
                     <select 
-                      value={settings?.find(s => s.key === 'numberFormat')?.value || 'default'}
+                      value={settings?.find(s => s.key === 'numberFormat')?.value || 'space-comma'}
                       onChange={(e) => updateSetting('numberFormat', e.target.value)}
                       className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all dark:text-slate-100"
                     >
