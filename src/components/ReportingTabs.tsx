@@ -3,11 +3,12 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, ComposedChart, Legend, PieChart, Pie, Cell
 } from 'recharts';
-import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, addMonths } from 'date-fns';
 import * as Icons from 'lucide-react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { calculateCapitalGains, calculateAverages } from '../lib/reportingUtils';
+import { db } from '../db';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
@@ -1133,6 +1134,419 @@ export function CategoryDetailsTab({ transactions, categories, accounts, formatR
             </tfoot>
           )}
         </table>
+      </div>
+    </div>
+  );
+}
+
+export function ForecastTab({ transactions, categories, accounts, accountTypes, metrics, formatRoundedAmount, settings }: any) {
+  const getSetting = (key: string, defaultValue: any) => {
+    if (!settings) return defaultValue;
+    const s = settings.find((s: any) => s.key === key);
+    return s !== undefined ? s.value : defaultValue;
+  };
+
+  const [horizonYears, setHorizonYears] = useState(getSetting('forecast_horizonYears', 5));
+  const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
+  const [samplingPeriodMonths, setSamplingPeriodMonths] = useState(getSetting('forecast_samplingPeriodMonths', 12));
+
+  const [salaryGrowth, setSalaryGrowth] = useState(getSetting('forecast_salaryGrowth', 2));
+  const [inflation, setInflation] = useState(getSetting('forecast_inflation', 2));
+  const [realEstateGrowth, setRealEstateGrowth] = useState(getSetting('forecast_realEstateGrowth', 3));
+  const [investmentReturn, setInvestmentReturn] = useState(getSetting('forecast_investmentReturn', 5));
+
+  const [incomeJumpEnabled, setIncomeJumpEnabled] = useState(getSetting('forecast_incomeJumpEnabled', false));
+  const [incomeJumpPercent, setIncomeJumpPercent] = useState(getSetting('forecast_incomeJumpPercent', 0));
+  const [incomeJumpMonthOffset, setIncomeJumpMonthOffset] = useState(getSetting('forecast_incomeJumpMonthOffset', 12));
+
+  const [expenseJumpEnabled, setExpenseJumpEnabled] = useState(getSetting('forecast_expenseJumpEnabled', false));
+  const [expenseJumpPercent, setExpenseJumpPercent] = useState(getSetting('forecast_expenseJumpPercent', 0));
+  const [expenseJumpMonthOffset, setExpenseJumpMonthOffset] = useState(getSetting('forecast_expenseJumpMonthOffset', 12));
+
+  useEffect(() => {
+    const updateSetting = async (key: string, value: any) => {
+      await db.settings.put({ key, value, updated_at: Date.now() });
+    };
+    updateSetting('forecast_horizonYears', horizonYears);
+    updateSetting('forecast_samplingPeriodMonths', samplingPeriodMonths);
+    updateSetting('forecast_salaryGrowth', salaryGrowth);
+    updateSetting('forecast_inflation', inflation);
+    updateSetting('forecast_realEstateGrowth', realEstateGrowth);
+    updateSetting('forecast_investmentReturn', investmentReturn);
+    updateSetting('forecast_incomeJumpEnabled', incomeJumpEnabled);
+    updateSetting('forecast_incomeJumpPercent', incomeJumpPercent);
+    updateSetting('forecast_incomeJumpMonthOffset', incomeJumpMonthOffset);
+    updateSetting('forecast_expenseJumpEnabled', expenseJumpEnabled);
+    updateSetting('forecast_expenseJumpPercent', expenseJumpPercent);
+    updateSetting('forecast_expenseJumpMonthOffset', expenseJumpMonthOffset);
+  }, [horizonYears, samplingPeriodMonths, salaryGrowth, inflation, realEstateGrowth, investmentReturn, incomeJumpEnabled, incomeJumpPercent, incomeJumpMonthOffset, expenseJumpEnabled, expenseJumpPercent, expenseJumpMonthOffset]);
+
+  const toggleYear = (index: string) => {
+    setExpandedYears(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+
+  const forecastData = useMemo(() => {
+    if (!transactions || transactions.length === 0) return null;
+    
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const currentMonthStr = format(today, 'yyyy-MM');
+    
+    const openingBalanceCatIds = new Set(categories?.filter((c:any) => c.icon === 'OpeningBalance').map((c:any) => c.id) || []);
+
+    const monthlyIncome: Record<string, number> = {};
+    const monthlyExpenses: Record<string, number> = {};
+    const initialBalances: Record<number, number> = {};
+    const monthlyCategoryTotals: Record<string, Record<string, number>> = {};
+
+    transactions.forEach((t:any) => {
+      initialBalances[t.account_id] = (initialBalances[t.account_id] || 0) + (t.amount || 0);
+
+      if (t.date > todayStr) return; // exclude future
+      if (openingBalanceCatIds.has(t.category_id)) return;
+      
+      const monthKey = t.date.substring(0, 7);
+      const catId = t.category_id || 'unassigned';
+      
+      if (!monthlyCategoryTotals[monthKey]) monthlyCategoryTotals[monthKey] = {};
+      monthlyCategoryTotals[monthKey][catId] = (monthlyCategoryTotals[monthKey][catId] || 0) + t.amount;
+    });
+
+    Object.entries(monthlyCategoryTotals).forEach(([monthKey, cats]) => {
+      Object.values(cats).forEach(amount => {
+        if (amount > 0) {
+          monthlyIncome[monthKey] = (monthlyIncome[monthKey] || 0) + amount;
+        } else if (amount < 0) {
+          monthlyExpenses[monthKey] = (monthlyExpenses[monthKey] || 0) + Math.abs(amount);
+        }
+      });
+    });
+
+    let initialRealEstate = 0;
+    let initialInvestments = 0;
+    let initialCashAndOther = 0;
+    
+    accounts?.forEach((acc:any) => {
+      const bal = initialBalances[acc.id] || 0;
+      const type = accountTypes?.find((t: any) => t.id === acc.account_type_id);
+      const icon = type?.icon;
+      
+      if (icon === 'Home') {
+        initialRealEstate += bal;
+      } else if (icon === 'TrendingUp' || icon === 'ArrowUpRight') {
+        initialInvestments += bal;
+      } else {
+        initialCashAndOther += bal;
+      }
+    });
+
+    const startOfData = Array.from(new Set([...Object.keys(monthlyIncome), ...Object.keys(monthlyExpenses)])).sort()[0] || currentMonthStr;
+    const monthsToConsider = [];
+    for (let i = 0; i < samplingPeriodMonths; i++) {
+        const k = format(subMonths(today, i), 'yyyy-MM');
+        if (k >= startOfData) {
+            monthsToConsider.push(k);
+        }
+    }
+    const divisor = Math.max(1, monthsToConsider.length);
+    let totalSampledIncome = 0;
+    let totalSampledExpenses = 0;
+    monthsToConsider.forEach(k => {
+        totalSampledIncome += (monthlyIncome[k] || 0);
+        totalSampledExpenses += (monthlyExpenses[k] || 0);
+    });
+    
+    const avgMonthlyIncome = totalSampledIncome / divisor;
+    const avgMonthlyExpenses = totalSampledExpenses / divisor;
+    const avgMonthlySavings = avgMonthlyIncome - avgMonthlyExpenses;
+
+    let targetDate = today;
+    const totalMonthsCount = horizonYears * 12;
+    
+    let yearlyData: Record<string, any> = {};
+    
+    let currentIncomeBase = avgMonthlyIncome;
+    let currentExpensesBase = avgMonthlyExpenses;
+    
+    let realEstateBalance = initialRealEstate;
+    let investmentBalance = initialInvestments;
+    let cashBalance = initialCashAndOther;
+    
+    let actualAverageIncome = 0;
+    let actualAverageExpenses = 0;
+    let actualAverageSavings = 0;
+    let totalMonthsSimulated = 0;
+
+    for (let i = 1; i <= totalMonthsCount; i++) {
+        targetDate = addMonths(today, i);
+        const yearStr = format(targetDate, 'yyyy');
+        
+        if (!yearlyData[yearStr]) {
+            yearlyData[yearStr] = {
+                year: yearStr,
+                yearLabel: yearStr,
+                totalIncome: 0,
+                totalExpenses: 0,
+                totalSavings: 0,
+                totalInvestmentReturn: 0,
+                totalRealEstateReturn: 0,
+                endNetWorth: 0,
+                months: []
+            };
+        }
+        
+        let activeIncomeMonth = currentIncomeBase;
+        if (incomeJumpEnabled && i >= incomeJumpMonthOffset) {
+           activeIncomeMonth = currentIncomeBase * (1 + (incomeJumpPercent / 100));
+        }
+
+        let activeExpenseMonth = currentExpensesBase;
+        if (expenseJumpEnabled && i >= expenseJumpMonthOffset) {
+           activeExpenseMonth = currentExpensesBase * (1 + (expenseJumpPercent / 100));
+        }
+
+        const monthlySavings = activeIncomeMonth - activeExpenseMonth;
+
+        // Apply growth for the balances
+        const reMonthlyGrowth = (realEstateGrowth / 100) / 12;
+        const invMonthlyGrowth = (investmentReturn / 100) / 12;
+
+        const reMonthlyReturn = realEstateBalance * reMonthlyGrowth;
+        const invMonthlyReturn = investmentBalance * invMonthlyGrowth;
+
+        realEstateBalance += reMonthlyReturn;
+        investmentBalance += invMonthlyReturn;
+        cashBalance += monthlySavings;
+
+        let currentNW = realEstateBalance + investmentBalance + cashBalance;
+
+        yearlyData[yearStr].totalIncome += activeIncomeMonth;
+        yearlyData[yearStr].totalExpenses += activeExpenseMonth;
+        yearlyData[yearStr].totalSavings += monthlySavings;
+        yearlyData[yearStr].totalInvestmentReturn += invMonthlyReturn;
+        yearlyData[yearStr].totalRealEstateReturn += reMonthlyReturn;
+        yearlyData[yearStr].endNetWorth = currentNW;
+        
+        actualAverageIncome += activeIncomeMonth;
+        actualAverageExpenses += activeExpenseMonth;
+        actualAverageSavings += monthlySavings;
+        totalMonthsSimulated++;
+        
+        yearlyData[yearStr].months.push({
+           monthName: format(targetDate, 'MMM yyyy'),
+           income: activeIncomeMonth,
+           expenses: activeExpenseMonth,
+           savings: monthlySavings,
+           investmentReturn: invMonthlyReturn,
+           realEstateReturn: reMonthlyReturn,
+           endNetWorth: currentNW,
+        });
+
+        // Apply macro drivers for the NEXT month's numbers
+        currentIncomeBase *= (1 + ((salaryGrowth / 100) / 12));
+        currentExpensesBase *= (1 + ((inflation / 100) / 12));
+    }
+     const yearlyTableData = Object.values(yearlyData).sort((a: any, b: any) => a.year.localeCompare(b.year));
+    
+    const hasInvestmentReturns = yearlyTableData.some((r: any) => Math.abs(r.totalInvestmentReturn) > 0.01);
+    const hasRealEstateReturns = yearlyTableData.some((r: any) => Math.abs(r.totalRealEstateReturn) > 0.01);
+
+    return { 
+       yearlyTableData,
+       hasInvestmentReturns,
+       hasRealEstateReturns,
+       avgMonthlyIncome: totalMonthsSimulated > 0 ? actualAverageIncome / totalMonthsSimulated : 0, 
+       avgMonthlyExpenses: totalMonthsSimulated > 0 ? actualAverageExpenses / totalMonthsSimulated : 0, 
+       avgMonthlySavings: totalMonthsSimulated > 0 ? actualAverageSavings / totalMonthsSimulated : 0
+    };
+  }, [transactions, categories, metrics, horizonYears, samplingPeriodMonths, salaryGrowth, inflation, realEstateGrowth, investmentReturn, incomeJumpEnabled, incomeJumpPercent, incomeJumpMonthOffset, expenseJumpEnabled, expenseJumpPercent, expenseJumpMonthOffset, accounts]);
+
+  if (!forecastData) return null;
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Scenario Drivers</h3>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Horizon (Years)</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">1</span>
+              <input 
+                type="range" 
+                min="1" max="30" step="1" 
+                value={horizonYears} 
+                onChange={(e) => setHorizonYears(parseInt(e.target.value))}
+                className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <span className="text-sm font-semibold w-6 text-right">{horizonYears}</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sampling (Months)</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">1</span>
+              <input 
+                type="range" 
+                min="1" max="60" step="1" 
+                value={samplingPeriodMonths} 
+                onChange={(e) => setSamplingPeriodMonths(parseInt(e.target.value))}
+                className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <span className="text-sm font-semibold w-6 text-right">{samplingPeriodMonths}</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Salary Growth (%/yr)</label>
+            <input type="number" step="0.1" value={salaryGrowth} onChange={(e) => setSalaryGrowth(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Inflation/Expenses (%/yr)</label>
+            <input type="number" step="0.1" value={inflation} onChange={(e) => setInflation(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Real Estate Return (%/yr)</label>
+            <input type="number" step="0.1" value={realEstateGrowth} onChange={(e) => setRealEstateGrowth(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Investments Return (%/yr)</label>
+            <input type="number" step="0.1" value={investmentReturn} onChange={(e) => setInvestmentReturn(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
+          </div>
+        </div>
+        
+        <div className="p-6 border-t border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30">
+          <label className="flex items-center gap-2 cursor-pointer mb-4">
+            <input type="checkbox" checked={incomeJumpEnabled} onChange={(e) => setIncomeJumpEnabled(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700" />
+            <span className="font-medium text-sm text-slate-900 dark:text-slate-100">Simulate Income Jump</span>
+          </label>
+          
+          {incomeJumpEnabled && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pl-6 border-l-2 border-blue-500 dark:border-blue-500/50 ml-1 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Income Jump Percentage (%)</label>
+                <div className="flex items-center gap-2">
+                  <input type="range" min="-100" max="300" step="5" value={incomeJumpPercent} onChange={(e) => setIncomeJumpPercent(parseInt(e.target.value))} className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                  <span className="text-sm font-semibold w-12 text-right">{incomeJumpPercent > 0 ? '+' : ''}{incomeJumpPercent}%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Months until jump occurs</label>
+                <input type="number" min="0" value={incomeJumpMonthOffset} onChange={(e) => setIncomeJumpMonthOffset(parseInt(e.target.value) || 0)} className="w-full sm:w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
+              </div>
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 cursor-pointer mb-4">
+            <input type="checkbox" checked={expenseJumpEnabled} onChange={(e) => setExpenseJumpEnabled(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700" />
+            <span className="font-medium text-sm text-slate-900 dark:text-slate-100">Simulate Expense Jump</span>
+          </label>
+          
+          {expenseJumpEnabled && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pl-6 border-l-2 border-blue-500 dark:border-blue-500/50 ml-1">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Expense Jump Percentage (%)</label>
+                <div className="flex items-center gap-2">
+                  <input type="range" min="-100" max="300" step="5" value={expenseJumpPercent} onChange={(e) => setExpenseJumpPercent(parseInt(e.target.value))} className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                  <span className="text-sm font-semibold w-12 text-right">{expenseJumpPercent > 0 ? '+' : ''}{expenseJumpPercent}%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Months until jump occurs</label>
+                <input type="number" min="0" value={expenseJumpMonthOffset} onChange={(e) => setExpenseJumpMonthOffset(parseInt(e.target.value) || 0)} className="w-full sm:w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <MetricCard title="Avg Projected Monthly Income" value={formatRoundedAmount(forecastData.avgMonthlyIncome)} />
+        <MetricCard title="Avg Projected Monthly Expense" value={formatRoundedAmount(forecastData.avgMonthlyExpenses)} />
+        <MetricCard title="Avg Projected Monthly Savings" value={formatRoundedAmount(forecastData.avgMonthlySavings)} />
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-slate-50 dark:bg-slate-800/50">
+              <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                <th className="px-6 py-4 font-semibold">Year</th>
+                <th className="px-6 py-4 font-semibold text-right">Proj. Income</th>
+                <th className="px-6 py-4 font-semibold text-right">Proj. Expenses</th>
+                <th className="px-6 py-4 font-semibold text-right">Proj. Net Savings</th>
+                {forecastData.hasInvestmentReturns && <th className="px-6 py-4 font-semibold text-right">Investment Return</th>}
+                {forecastData.hasRealEstateReturns && <th className="px-6 py-4 font-semibold text-right">Real Estate Return</th>}
+                <th className="px-6 py-4 font-semibold text-right">End of Year Net Worth</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+               {forecastData.yearlyTableData.map((row: any) => (
+                <React.Fragment key={row.year}>
+                  <tr onClick={() => toggleYear(row.year)} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 cursor-pointer">
+                    <td className="px-6 py-4 text-slate-900 dark:text-slate-100 font-medium flex items-center gap-2">
+                       {expandedYears[row.year] ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                       {row.yearLabel}
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                      {formatRoundedAmount(row.totalIncome)}
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                      {formatRoundedAmount(row.totalExpenses)}
+                    </td>
+                    <td className={cn("px-6 py-4 text-right font-medium", row.totalSavings < 0 ? 'text-red-500' : 'text-emerald-500')}>
+                      {formatRoundedAmount(row.totalSavings)}
+                    </td>
+                    {forecastData.hasInvestmentReturns && (
+                      <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                        {formatRoundedAmount(row.totalInvestmentReturn)}
+                      </td>
+                    )}
+                    {forecastData.hasRealEstateReturns && (
+                      <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                        {formatRoundedAmount(row.totalRealEstateReturn)}
+                      </td>
+                    )}
+                    <td className="px-6 py-4 text-right text-slate-900 dark:text-slate-100 font-bold">
+                      {formatRoundedAmount(row.endNetWorth)}
+                    </td>
+                  </tr>
+                   {expandedYears[row.year] && row.months.map((m: any, mIdx: number) => (
+                    <tr key={`${row.year}-${mIdx}`} className="bg-slate-50/30 dark:bg-slate-800/10 border-t border-slate-100 dark:border-slate-800">
+                      <td className="px-6 py-2 pl-12 text-slate-600 dark:text-slate-400 text-xs">
+                        {m.monthName}
+                      </td>
+                      <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                        {formatRoundedAmount(m.income)}
+                      </td>
+                      <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                        {formatRoundedAmount(m.expenses)}
+                      </td>
+                      <td className={cn("px-6 py-2 text-right text-xs", m.savings < 0 ? 'text-red-400/80' : 'text-emerald-400/80')}>
+                        {formatRoundedAmount(m.savings)}
+                      </td>
+                      {forecastData.hasInvestmentReturns && (
+                        <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                          {formatRoundedAmount(m.investmentReturn)}
+                        </td>
+                      )}
+                      {forecastData.hasRealEstateReturns && (
+                        <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                          {formatRoundedAmount(m.realEstateReturn)}
+                        </td>
+                      )}
+                      <td className="px-6 py-2 text-right text-slate-700 dark:text-slate-300 font-medium text-xs">
+                        {formatRoundedAmount(m.endNetWorth)}
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

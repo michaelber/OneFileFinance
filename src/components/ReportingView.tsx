@@ -11,7 +11,7 @@ import {
   calculateFinancialFreedomYears
 } from '../lib/reportingUtils';
 import { formatAmount } from '../lib/formatters';
-import { NetWorthTab, SavingsRateTab, AccountsTab, CategoriesTab, CategoryDetailsTab } from './ReportingTabs';
+import { NetWorthTab, SavingsRateTab, AccountsTab, CategoriesTab, CategoryDetailsTab, ForecastTab } from './ReportingTabs';
 
 export function ReportingView() {
   const transactions = useLiveQuery(() => db.transactions.toArray());
@@ -24,7 +24,7 @@ export function ReportingView() {
   const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'space-comma';
   const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
 
-  const [activeTab, setActiveTab] = useState<'netWorth' | 'categories' | 'savingsRate' | 'accounts' | 'categoryDetails'>('netWorth');
+  const [activeTab, setActiveTab] = useState<'netWorth' | 'categories' | 'savingsRate' | 'accounts' | 'categoryDetails' | 'forecast'>('netWorth');
   const [initialCategoryDetailsFilter, setInitialCategoryDetailsFilter] = useState<{ categoryId?: string, year?: number, month?: number, accountId?: string } | undefined>();
 
   const handleCellClick = (categoryId?: string, year?: number, month?: number, accountId?: string) => {
@@ -96,6 +96,12 @@ export function ReportingView() {
         >
           Accounts
         </button>
+        <button
+          className={`px-4 py-2 font-medium text-sm whitespace-nowrap ${activeTab === 'forecast' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+          onClick={() => setActiveTab('forecast')}
+        >
+          Forecast
+        </button>
       </div>
 
       {activeTab === 'netWorth' && (
@@ -124,6 +130,18 @@ export function ReportingView() {
           categories={categories}
           formatRoundedAmount={formatRoundedAmount} 
           compactView={compactView} 
+        />
+      )}
+
+      {activeTab === 'forecast' && (
+        <ForecastTab 
+          transactions={transactions} 
+          categories={categories}
+          accounts={accounts}
+          accountTypes={accountTypes}
+          metrics={metrics} 
+          settings={settings}
+          formatRoundedAmount={formatRoundedAmount} 
         />
       )}
 
