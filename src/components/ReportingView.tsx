@@ -141,7 +141,8 @@ export function ReportingView() {
           accountTypes={accountTypes}
           metrics={metrics} 
           settings={settings}
-          formatRoundedAmount={formatRoundedAmount} 
+          formatRoundedAmount={formatRoundedAmount}
+          compactView={compactView}
         />
       )}
 

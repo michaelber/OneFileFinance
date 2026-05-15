@@ -1259,7 +1259,7 @@ function CategoryTable() {
 
 function CategoryRuleTable() {
   const rules = useLiveQuery(() => db.category_rules.toArray()) || [];
-  const categories = useLiveQuery(() => db.categories.toArray()) || [];
+  const categories = useLiveQuery(() => db.categories.toArray().then(cats => cats.sort((a, b) => a.name.localeCompare(b.name)))) || [];
   const settings = useLiveQuery(() => db.settings.toArray());
   const compactView = settings?.find(s => s.key === 'compactView')?.value ?? true;
   const [activeCell, setActiveCell] = useState<{ id: number; col: number } | null>(null);

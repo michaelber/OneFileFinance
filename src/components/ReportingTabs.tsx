@@ -12,10 +12,24 @@ import { db } from '../db';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
-function MetricCard({ title, value }: { title: string, value: string }) {
+function TooltipIcon({ text }: { text: string }) {
   return (
-    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-      <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">{title}</h3>
+    <div className="relative flex items-center group">
+      <Icons.HelpCircle className="w-4 h-4 text-slate-400 hover:text-slate-500 cursor-help" />
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-slate-900 dark:bg-slate-800 text-slate-50 text-xs text-center rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-xl font-normal pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-900 dark:before:border-t-slate-800 leading-relaxed">
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ title, value, tooltip }: { title: string, value: string, tooltip?: string }) {
+  return (
+    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</h3>
+        {tooltip && <TooltipIcon text={tooltip} />}
+      </div>
       <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   );
@@ -65,6 +79,7 @@ export function NetWorthTab({ transactions, metrics, formatRoundedAmount }: any)
         <MetricCard 
           title="Financial Freedom" 
           value={metrics.financialFreedomYears !== null ? `${metrics.financialFreedomYears.toFixed(1)} Years` : 'N/A'} 
+          tooltip="Estimates how many years you could sustain your current lifestyle without any income. Calculated as: Total Net Worth / Yearly Expenses (based on the last 12 months)"
         />
       </div>
 
@@ -1139,7 +1154,7 @@ export function CategoryDetailsTab({ transactions, categories, accounts, formatR
   );
 }
 
-export function ForecastTab({ transactions, categories, accounts, accountTypes, metrics, formatRoundedAmount, settings }: any) {
+export function ForecastTab({ transactions, categories, accounts, accountTypes, metrics, formatRoundedAmount, settings, compactView }: any) {
   const getSetting = (key: string, defaultValue: any) => {
     if (!settings) return defaultValue;
     const s = settings.find((s: any) => s.key === key);
@@ -1192,7 +1207,7 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
     const todayStr = format(today, 'yyyy-MM-dd');
     const currentMonthStr = format(today, 'yyyy-MM');
     
-    const openingBalanceCatIds = new Set(categories?.filter((c:any) => c.icon === 'OpeningBalance').map((c:any) => c.id) || []);
+    const excludedFromForecastCatIds = new Set(categories?.filter((c:any) => ['OpeningBalance', 'SeverancePay', 'CapitalGains'].includes(c.icon)).map((c:any) => c.id) || []);
 
     const monthlyIncome: Record<string, number> = {};
     const monthlyExpenses: Record<string, number> = {};
@@ -1203,7 +1218,7 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
       initialBalances[t.account_id] = (initialBalances[t.account_id] || 0) + (t.amount || 0);
 
       if (t.date > todayStr) return; // exclude future
-      if (openingBalanceCatIds.has(t.category_id)) return;
+      if (excludedFromForecastCatIds.has(t.category_id)) return;
       
       const monthKey = t.date.substring(0, 7);
       const catId = t.category_id || 'unassigned';
@@ -1307,6 +1322,15 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
 
         const monthlySavings = activeIncomeMonth - activeExpenseMonth;
 
+        cashBalance += monthlySavings;
+
+        // Draw down from investments if cash falls below 0
+        if (cashBalance < 0 && investmentBalance > 0) {
+            const drawAmount = Math.min(Math.abs(cashBalance), investmentBalance);
+            investmentBalance -= drawAmount;
+            cashBalance += drawAmount;
+        }
+
         // Apply growth for the balances
         const reMonthlyGrowth = (realEstateGrowth / 100) / 12;
         const invMonthlyGrowth = (investmentReturn / 100) / 12;
@@ -1316,7 +1340,6 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
 
         realEstateBalance += reMonthlyReturn;
         investmentBalance += invMonthlyReturn;
-        cashBalance += monthlySavings;
 
         let currentNW = realEstateBalance + investmentBalance + cashBalance;
 
@@ -1366,13 +1389,16 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
   return (
     <div className="space-y-8 animate-fade-in">
       
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 rounded-t-xl">
              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Scenario Drivers</h3>
         </div>
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Horizon (Years)</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Horizon (Years)
+              <TooltipIcon text="The number of years to forecast into the future." />
+            </label>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">1</span>
               <input 
@@ -1386,7 +1412,10 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sampling (Months)</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Sampling (Months)
+              <TooltipIcon text="Determines how many previous months are averaged to calculate the base monthly income and expenses for the forecast." />
+            </label>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">1</span>
               <input 
@@ -1400,19 +1429,27 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Salary Growth (%/yr)</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Salary Growth (%/yr)
+            </label>
             <input type="number" step="0.1" value={salaryGrowth} onChange={(e) => setSalaryGrowth(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Inflation/Expenses (%/yr)</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Inflation/Expenses (%/yr)
+            </label>
             <input type="number" step="0.1" value={inflation} onChange={(e) => setInflation(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Real Estate Return (%/yr)</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Real Estate Return (%/yr)
+            </label>
             <input type="number" step="0.1" value={realEstateGrowth} onChange={(e) => setRealEstateGrowth(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Investments Return (%/yr)</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Investments Return (%/yr)
+            </label>
             <input type="number" step="0.1" value={investmentReturn} onChange={(e) => setInvestmentReturn(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm" />
           </div>
         </div>
@@ -1473,71 +1510,71 @@ export function ForecastTab({ transactions, categories, accounts, accountTypes, 
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-50 dark:bg-slate-800/50">
               <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                <th className="px-6 py-4 font-semibold">Year</th>
-                <th className="px-6 py-4 font-semibold text-right">Proj. Income</th>
-                <th className="px-6 py-4 font-semibold text-right">Proj. Expenses</th>
-                <th className="px-6 py-4 font-semibold text-right">Proj. Net Savings</th>
-                {forecastData.hasInvestmentReturns && <th className="px-6 py-4 font-semibold text-right">Investment Return</th>}
-                {forecastData.hasRealEstateReturns && <th className="px-6 py-4 font-semibold text-right">Real Estate Return</th>}
-                <th className="px-6 py-4 font-semibold text-right">End of Year Net Worth</th>
+                <th className={cn("px-6 font-semibold", compactView ? "py-1.5" : "py-4")}>Year</th>
+                <th className={cn("px-6 font-semibold text-right", compactView ? "py-1.5" : "py-4")}>Proj. Income</th>
+                <th className={cn("px-6 font-semibold text-right", compactView ? "py-1.5" : "py-4")}>Proj. Expenses</th>
+                <th className={cn("px-6 font-semibold text-right", compactView ? "py-1.5" : "py-4")}>Proj. Net Savings</th>
+                {forecastData.hasInvestmentReturns && <th className={cn("px-6 font-semibold text-right", compactView ? "py-1.5" : "py-4")}>Investment Return</th>}
+                {forecastData.hasRealEstateReturns && <th className={cn("px-6 font-semibold text-right", compactView ? "py-1.5" : "py-4")}>Real Estate Return</th>}
+                <th className={cn("px-6 font-semibold text-right", compactView ? "py-1.5" : "py-4")}>End of Year Net Worth</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                {forecastData.yearlyTableData.map((row: any) => (
                 <React.Fragment key={row.year}>
                   <tr onClick={() => toggleYear(row.year)} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 cursor-pointer">
-                    <td className="px-6 py-4 text-slate-900 dark:text-slate-100 font-medium flex items-center gap-2">
+                    <td className={cn("px-6 text-slate-900 dark:text-slate-100 font-medium flex items-center gap-2", compactView ? "py-1.5" : "py-4")}>
                        {expandedYears[row.year] ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
                        {row.yearLabel}
                     </td>
-                    <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                    <td className={cn("px-6 text-right text-slate-700 dark:text-slate-300", compactView ? "py-1.5" : "py-4")}>
                       {formatRoundedAmount(row.totalIncome)}
                     </td>
-                    <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                    <td className={cn("px-6 text-right text-slate-700 dark:text-slate-300", compactView ? "py-1.5" : "py-4")}>
                       {formatRoundedAmount(row.totalExpenses)}
                     </td>
-                    <td className={cn("px-6 py-4 text-right font-medium", row.totalSavings < 0 ? 'text-red-500' : 'text-emerald-500')}>
+                    <td className={cn("px-6 text-right font-medium", row.totalSavings < 0 ? 'text-red-500' : 'text-emerald-500', compactView ? "py-1.5" : "py-4")}>
                       {formatRoundedAmount(row.totalSavings)}
                     </td>
                     {forecastData.hasInvestmentReturns && (
-                      <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                      <td className={cn("px-6 text-right text-slate-700 dark:text-slate-300", compactView ? "py-1.5" : "py-4")}>
                         {formatRoundedAmount(row.totalInvestmentReturn)}
                       </td>
                     )}
                     {forecastData.hasRealEstateReturns && (
-                      <td className="px-6 py-4 text-right text-slate-700 dark:text-slate-300">
+                      <td className={cn("px-6 text-right text-slate-700 dark:text-slate-300", compactView ? "py-1.5" : "py-4")}>
                         {formatRoundedAmount(row.totalRealEstateReturn)}
                       </td>
                     )}
-                    <td className="px-6 py-4 text-right text-slate-900 dark:text-slate-100 font-bold">
+                    <td className={cn("px-6 text-right text-slate-900 dark:text-slate-100 font-bold", compactView ? "py-1.5" : "py-4")}>
                       {formatRoundedAmount(row.endNetWorth)}
                     </td>
                   </tr>
                    {expandedYears[row.year] && row.months.map((m: any, mIdx: number) => (
                     <tr key={`${row.year}-${mIdx}`} className="bg-slate-50/30 dark:bg-slate-800/10 border-t border-slate-100 dark:border-slate-800">
-                      <td className="px-6 py-2 pl-12 text-slate-600 dark:text-slate-400 text-xs">
+                      <td className={cn("px-6 pl-12 text-slate-600 dark:text-slate-400 text-xs", compactView ? "py-1" : "py-2")}>
                         {m.monthName}
                       </td>
-                      <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                      <td className={cn("px-6 text-right text-slate-600 dark:text-slate-400 text-xs", compactView ? "py-1" : "py-2")}>
                         {formatRoundedAmount(m.income)}
                       </td>
-                      <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                      <td className={cn("px-6 text-right text-slate-600 dark:text-slate-400 text-xs", compactView ? "py-1" : "py-2")}>
                         {formatRoundedAmount(m.expenses)}
                       </td>
-                      <td className={cn("px-6 py-2 text-right text-xs", m.savings < 0 ? 'text-red-400/80' : 'text-emerald-400/80')}>
+                      <td className={cn("px-6 text-right text-xs", m.savings < 0 ? 'text-red-400/80' : 'text-emerald-400/80', compactView ? "py-1" : "py-2")}>
                         {formatRoundedAmount(m.savings)}
                       </td>
                       {forecastData.hasInvestmentReturns && (
-                        <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                        <td className={cn("px-6 text-right text-slate-600 dark:text-slate-400 text-xs", compactView ? "py-1" : "py-2")}>
                           {formatRoundedAmount(m.investmentReturn)}
                         </td>
                       )}
                       {forecastData.hasRealEstateReturns && (
-                        <td className="px-6 py-2 text-right text-slate-600 dark:text-slate-400 text-xs">
+                        <td className={cn("px-6 text-right text-slate-600 dark:text-slate-400 text-xs", compactView ? "py-1" : "py-2")}>
                           {formatRoundedAmount(m.realEstateReturn)}
                         </td>
                       )}
-                      <td className="px-6 py-2 text-right text-slate-700 dark:text-slate-300 font-medium text-xs">
+                      <td className={cn("px-6 text-right text-slate-700 dark:text-slate-300 font-medium text-xs", compactView ? "py-1" : "py-2")}>
                         {formatRoundedAmount(m.endNetWorth)}
                       </td>
                     </tr>

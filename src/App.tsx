@@ -9,12 +9,13 @@ import { LoginScreen } from './components/LoginScreen';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import { format } from 'date-fns';
-import { TrendingUp, TrendingDown, Wallet, PieChart, Save } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, PieChart, Save, Check, FolderOpen } from 'lucide-react';
 import { cn } from './lib/utils';
 import { processRecurringTransactions } from './services/recurringService';
 import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile, openDatabaseFromPath, pickDatabaseFile } from './lib/fileHandling';
 import { encryptData } from './lib/crypto';
 import { StatusBar } from './components/StatusBar';
+import { seedBlankData, seedSampleData } from './lib/seedData';
 
 export default function App() {
   const [authStatus, setAuthStatus] = useState<'checking' | 'unauthorized' | 'authorized'>('checking');
@@ -254,81 +255,29 @@ export default function App() {
     setView('dashboard');
   };
 
-  // Seed initial data if empty
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Check if we need onboarding
   React.useEffect(() => {
     if (authStatus !== 'authorized') return;
 
-    const seedData = async () => {
-      if (hasProcessedRef.current) return;
-      hasProcessedRef.current = true;
-
-      // Process recurring transactions on start
-      const ids = await processRecurringTransactions(true);
-      if (ids.length > 0) {
-        setNewTransactionIds(ids);
-        setAddedRecurringCount(ids.length);
-      }
-
+    const checkOnboarding = async () => {
       const accountCount = await db.accounts.count();
       if (accountCount === 0) {
-        // Seed Account Types
-        await db.account_types.bulkAdd([
-          { id: 1, name: 'Cash', icon: 'Wallet', updated_at: Date.now() },
-          { id: 2, name: 'Stocks', icon: 'TrendingUp', updated_at: Date.now() },
-          { id: 3, name: 'Real Estate', icon: 'Home', updated_at: Date.now() },
-          { id: 4, name: 'Crypto', icon: 'Coins', updated_at: Date.now() },
-          { id: 5, name: 'Fixed Deposit', icon: 'ArrowUpRight', updated_at: Date.now() },
-          { id: 6, name: 'Accounts Receivable', icon: 'Hammer', updated_at: Date.now() }
-        ]);
-
-        // Seed Accounts
-        await db.accounts.bulkAdd([
-          { id: 1, name: 'Cash', account_type_id: 1, is_liquid: true, is_archived: false, show_in_top_bar: true, description: 'Primary bank account', order: 3, updated_at: Date.now() },
-          { id: 4, name: 'Bank Account', account_type_id: 1, is_liquid: true, show_in_top_bar: true, is_archived: false, description: '', order: 0, updated_at: Date.now() },
-          { id: 13, name: 'Savings Book', account_type_id: 5, order: 2, is_liquid: false, show_in_top_bar: true, is_archived: false, description: '', updated_at: Date.now() },
-          { id: 14, name: 'Crypto Exchange', account_type_id: 4, order: 4, is_liquid: false, show_in_top_bar: false, is_archived: false, description: '', updated_at: Date.now() },
-          { id: 16, name: 'Stock Portfolio', account_type_id: 2, order: 1, is_liquid: false, show_in_top_bar: true, is_archived: false, description: '', updated_at: Date.now() },
-          { id: 17, name: 'Real Estate', account_type_id: 3, order: 6, is_liquid: false, show_in_top_bar: false, is_archived: false, description: '', updated_at: Date.now() },
-          { id: 18, name: 'Accounts Receivable', account_type_id: 6, order: 7, is_liquid: false, show_in_top_bar: false, is_archived: false, description: '', updated_at: Date.now() }
-        ]);
-
-        // Seed Categories
-        await db.categories.bulkAdd([
-          { id: 5, name: 'Asset Purchase', icon: 'Home', updated_at: Date.now() },
-          { id: 6, name: 'Daily Expenses', icon: 'Banknote', updated_at: Date.now() },
-          { id: 7, name: 'Gambling', icon: 'Zap', updated_at: Date.now() },
-          { id: 8, name: 'Project/Contract', icon: 'Briefcase', updated_at: Date.now() },
-          { id: 9, name: 'Gifts', icon: 'Gift', updated_at: Date.now() },
-          { id: 11, name: 'Capital Gains', icon: 'CapitalGains', updated_at: Date.now() },
-          { id: 12, name: 'Mobile Phone', icon: 'Smartphone', updated_at: Date.now() },
-          { id: 14, name: 'IT Services', icon: 'Briefcase', updated_at: Date.now() },
-          { id: 15, name: 'Asset Sale', icon: 'Hammer', updated_at: Date.now() },
-          { id: 17, name: 'Bonus/Credit', icon: 'CreditCard', updated_at: Date.now() },
-          { id: 18, name: 'Taxes/Revenue', icon: 'ArrowDownLeft', updated_at: Date.now() },
-          { id: 19, name: 'Sports/Fitness', icon: 'Heart', updated_at: Date.now() },
-          { id: 20, name: 'Software', icon: 'Laptop', updated_at: Date.now() },
-          { id: 21, name: 'Public Transport', icon: 'Train', updated_at: Date.now() },
-          { id: 22, name: 'Salary', icon: 'Briefcase', updated_at: Date.now() },
-          { id: 23, name: 'Vacation', icon: 'Plane', updated_at: Date.now() },
-          { id: 24, name: 'Clothing', icon: 'ShoppingBag', updated_at: Date.now() },
-          { id: 25, name: 'Concert Tickets', icon: 'Music', updated_at: Date.now() },
-          { id: 26, name: 'Apartment/Housing', icon: 'Home', updated_at: Date.now() },
-          { id: 27, name: 'Going Out', icon: 'Wallet', updated_at: Date.now() },
-          { id: 28, name: 'Books/Audiobooks', icon: 'Music', updated_at: Date.now() },
-          { id: 29, name: 'Expenses', icon: 'ArrowDownLeft', updated_at: Date.now() },
-          { id: 30, name: 'Health', icon: 'Heart', updated_at: Date.now() },
-          { id: 32, name: 'Scholarship', icon: 'Wallet', updated_at: Date.now() },
-          { id: 33, name: 'Insurance', icon: 'Building', updated_at: Date.now() },
-          { id: 35, name: 'Music Streaming', icon: 'Music', updated_at: Date.now() },
-          { id: 36, name: 'Opening Balance', icon: 'OpeningBalance', updated_at: Date.now() },
-          { id: 37, name: 'Account Transfer', icon: 'Tag', updated_at: Date.now() },
-          { id: 38, name: 'Depreciation', icon: 'ArrowDownLeft', updated_at: Date.now() },
-          { id: 39, name: 'Real Estate Exp.', icon: 'Home', updated_at: Date.now() },
-          { id: 40, name: 'Severance Pay', icon: 'SeverancePay', updated_at: Date.now() }
-        ]);
+        setShowOnboarding(true);
+      } else {
+        // Process recurring transactions
+        if (!hasProcessedRef.current) {
+          hasProcessedRef.current = true;
+          const ids = await processRecurringTransactions(true);
+          if (ids.length > 0) {
+            setNewTransactionIds(ids);
+            setAddedRecurringCount(ids.length);
+          }
+        }
       }
     };
-    seedData();
+    checkOnboarding();
   }, [authStatus]);
 
   if (authStatus === 'checking') return null;
@@ -410,7 +359,80 @@ export default function App() {
         activeView={view}
       />
       
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        {showOnboarding && (
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full p-10 border border-slate-200 dark:border-slate-800 animate-fade-in">
+              <div className="text-center mb-10 flex flex-col items-center">
+                <img src="favicon.svg" alt="OneFileFinance Logo" className="w-20 h-20 mb-6 drop-shadow-md" />
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-3">Welcome to OneFileFinance</h2>
+                <p className="text-slate-500 dark:text-slate-400 text-lg max-w-md mx-auto">How would you like to start your financial journey?</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button
+                  onClick={async () => {
+                    await seedBlankData();
+                    setShowOnboarding(false);
+                  }}
+                  className="group flex flex-col items-center text-center p-6 bg-slate-50 dark:bg-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200"
+                >
+                  <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 transition-transform">
+                    <Check className="w-6 h-6 text-slate-400 group-hover:text-blue-500" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Blank Slate</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Start fresh with just a few basic account types and essential categories.</p>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    await seedSampleData();
+                    setShowOnboarding(false);
+                  }}
+                  className="group flex flex-col items-center text-center p-6 bg-slate-50 dark:bg-slate-800/50 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all duration-200"
+                >
+                  <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 transition-transform">
+                    <PieChart className="w-6 h-6 text-slate-400 group-hover:text-emerald-500" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Sample Data</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Load comprehensive sample data with 3 years of generated transactions.</p>
+                </button>
+              </div>
+
+              {(window as any).__TAURI_INTERNALS__ && (
+                <div className="mt-8 text-center border-t border-slate-200 dark:border-slate-800 pt-6">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const path = await openDatabaseFromFile(sessionPassword);
+                        if (path) {
+                          setCurrentFilePath(path);
+                          await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
+                          setSaveStatus('saved');
+                          setShowOnboarding(false);
+                        }
+                      } catch (e: any) {
+                          if (e.message === 'FILE_ENCRYPTED') {
+                              setPendingFilePath(e.path);
+                              setAuthStatus('unauthorized');
+                              setShowOnboarding(false); // They will go to Login Screen and returning sets auth
+                          } else {
+                              console.error(e);
+                              alert("Error opening file: " + e.message);
+                          }
+                      }
+                    }}
+                    className="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 font-medium transition-colors inline-flex items-center gap-2"
+                  >
+                    <FolderOpen className="w-4 h-4" />
+                    Open existing .fin file
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {view === 'dashboard' && (
           <div className="flex-1 overflow-hidden max-w-7xl mx-auto w-full">
             <TransactionTable 

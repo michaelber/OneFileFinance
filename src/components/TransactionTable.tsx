@@ -708,6 +708,12 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
   const [visibleCount, setVisibleCount] = useState(100);
 
   useEffect(() => {
+    if (uncategorizedCount === 0 && showUncategorizedOnly) {
+      setShowUncategorizedOnly(false);
+    }
+  }, [uncategorizedCount, showUncategorizedOnly]);
+
+  useEffect(() => {
     setVisibleCount(100);
   }, [accountId]);
 

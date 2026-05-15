@@ -6,7 +6,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { parse, isValid, format, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
-import { parseAmount } from '../lib/formatters';
+import { parseAmount, formatAmount } from '../lib/formatters';
 
 interface ImportViewProps {
   onBack: () => void;
@@ -72,8 +72,15 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
   const categories = useLiveQuery(() => db.categories.toArray());
   const categoryRules = useLiveQuery(() => db.category_rules.toArray());
   const settings = useLiveQuery(() => db.settings.toArray());
+  const transactions = useLiveQuery(() => db.transactions.toArray());
   
   const numberFormat = settings?.find(s => s.key === 'numberFormat')?.value || 'space-comma';
+
+  const targetAccount = accounts?.find(a => a.id === selectedAccountId);
+  const homeCurrency = settings?.find(s => s.key === 'homeCurrency')?.value || '€';
+  const currentBalance = targetAccount ? transactions?.filter(t => t.account_id === targetAccount.id).reduce((sum, t) => sum + t.amount, 0) || 0 : 0;
+  const importAmountSum = processedRows.filter(r => r.status === 'valid' && r.parsed).reduce((sum, r) => sum + (r.parsed?.amount || 0), 0);
+  const newBalance = currentBalance + importAmountSum;
 
   // Load saved mapping
   useEffect(() => {
@@ -574,6 +581,25 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
 
         {step === 'preview' && (
           <div className="space-y-6">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-200 dark:border-slate-800">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                  <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Current Balance</div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatAmount(currentBalance, homeCurrency, numberFormat)}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Import Sum ({processedRows.filter(r => r.status === 'valid').length} valid)</div>
+                  <div className={cn("text-2xl font-bold", importAmountSum < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                    {importAmountSum > 0 ? '+' : ''}{formatAmount(importAmountSum, homeCurrency, numberFormat)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">New Balance</div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatAmount(newBalance, homeCurrency, numberFormat)}</div>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-4 gap-4">
               <button 
                 onClick={() => setFilterStatus('all')}
