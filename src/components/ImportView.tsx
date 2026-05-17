@@ -11,6 +11,7 @@ import { parseAmount, formatAmount } from '../lib/formatters';
 interface ImportViewProps {
   onBack: () => void;
   initialAccountId?: number;
+  initialFile?: File | null;
   onImportComplete?: (accountId: number | undefined, importedIds: number[]) => void;
 }
 
@@ -37,9 +38,9 @@ interface ProcessedRow {
   errors: string[];
 }
 
-export function ImportView({ onBack, initialAccountId, onImportComplete }: ImportViewProps) {
+export function ImportView({ onBack, initialAccountId, initialFile, onImportComplete }: ImportViewProps) {
   const [step, setStep] = useState<Step>('upload');
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile || null);
   const [parsedData, setParsedData] = useState<ParsedData | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<number | ''>(initialAccountId || '');
   
@@ -150,38 +151,41 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
     }
   }, [parsedData]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFile = async (file: File) => {
     setFile(file);
 
     const isCSV = file.name.toLowerCase().endsWith('.csv');
     const isExcel = file.name.toLowerCase().match(/\.(xlsx|xls)$/);
 
     if (isCSV) {
-      Papa.parse(file, {
-        preview: 50, // Only preview first 50 rows initially
-        skipEmptyLines: true,
-        complete: (results) => {
-          const data = results.data as string[][];
-          if (data.length > 0) {
-            const newParsedData = {
-              headers: data[0],
-              rows: data.slice(1)
-            };
-            setParsedData(newParsedData);
-            
-            if (mapping.date && mapping.amount && Array.isArray(mapping.description) && mapping.description.length > 0 && 
-                newParsedData.headers.includes(mapping.date) && 
-                newParsedData.headers.includes(mapping.amount) && 
-                mapping.description.every(d => newParsedData.headers.includes(d))) {
-              processData(newParsedData, file);
-            } else {
-              setStep('mapping');
+      try {
+        const text = await file.text();
+        Papa.parse(text, {
+          preview: 50, // Only preview first 50 rows initially
+          skipEmptyLines: true,
+          complete: (results) => {
+            const data = results.data as string[][];
+            if (data.length > 0) {
+              const newParsedData = {
+                headers: data[0],
+                rows: data.slice(1)
+              };
+              setParsedData(newParsedData);
+              
+              if (mapping.date && mapping.amount && Array.isArray(mapping.description) && mapping.description.length > 0 && 
+                  newParsedData.headers.includes(mapping.date) && 
+                  newParsedData.headers.includes(mapping.amount) && 
+                  mapping.description.every(d => newParsedData.headers.includes(d))) {
+                processData(newParsedData, file);
+              } else {
+                setStep('mapping');
+              }
             }
           }
-        }
-      });
+        });
+      } catch (err) {
+        console.error("Failed to read CSV text:", err);
+      }
     } else if (isExcel) {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -210,6 +214,19 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
       };
       reader.readAsArrayBuffer(file);
     }
+  };
+
+  useEffect(() => {
+    if (initialFile && (!parsedData || initialFile !== file)) {
+      setParsedData(null);
+      handleFile(initialFile);
+    }
+  }, [initialFile]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    handleFile(file);
   };
 
   const handleMappingChange = (field: keyof FieldMapping, value: string | string[]) => {
@@ -411,35 +428,44 @@ export function ImportView({ onBack, initialAccountId, onImportComplete }: Impor
 
         {step === 'upload' && (
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-8">
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Target Account (Optional if mapped from file)
-              </label>
-              <select
-                value={selectedAccountId}
-                onChange={(e) => setSelectedAccountId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-100"
-              >
-                <option value="">Select an account (Optional)...</option>
-                {accounts?.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-            </div>
+            {initialFile && !parsedData ? (
+              <div className="text-center py-12 space-y-4">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-slate-500 dark:text-slate-400 font-medium">Processing your file...</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Target Account (Optional if mapped from file)
+                  </label>
+                  <select
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-100"
+                  >
+                    <option value="">Select an account (Optional)...</option>
+                    {accounts?.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-12 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors relative">
-              <input 
-                type="file" 
-                accept=".csv,.xlsx,.xls" 
-                onChange={handleFileUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-              />
-              <Upload className="w-10 h-10 text-slate-400 mx-auto mb-4" />
-              <p className="text-slate-900 dark:text-slate-100 font-medium mb-1">
-                Click or drag file to upload
-              </p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">Supports CSV and XLSX</p>
-            </div>
+                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-12 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors relative">
+                  <input 
+                    type="file" 
+                    accept=".csv,.xlsx,.xls" 
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                  />
+                  <Upload className="w-10 h-10 text-slate-400 mx-auto mb-4" />
+                  <p className="text-slate-900 dark:text-slate-100 font-medium mb-1">
+                    Click or drag file to upload
+                  </p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Supports CSV and XLSX</p>
+                </div>
+              </>
+            )}
           </div>
         )}
 

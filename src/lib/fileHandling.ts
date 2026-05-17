@@ -4,6 +4,15 @@ import { db } from '../db';
 import { encryptData, decryptData } from './crypto';
 import { generateExportData, processImportData } from './backup';
 
+export async function getCliArgs(): Promise<string[]> {
+  try {
+    return await invoke('get_cli_args');
+  } catch (e) {
+    console.warn("Failed to get cli args", e);
+    return [];
+  }
+}
+
 export async function saveDatabaseToFile(filePath?: string | null, sessionPassword?: string | null): Promise<string | null> {
   let targetPath = filePath as string | undefined;
 
@@ -63,6 +72,10 @@ export async function openDatabaseFromFile(sessionPassword?: string | null): Pro
 
 export async function openDatabaseFromPath(targetPath: string, sessionPassword?: string | null): Promise<string> {
   let text = await invoke<string>('read_file_direct', { path: targetPath });
+  text = text.trim();
+  if (text.charCodeAt(0) === 0xFEFF) {
+    text = text.slice(1);
+  }
   
   if (text.startsWith('OFF_ENC::')) {
       if (!sessionPassword) {

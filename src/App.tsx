@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { TrendingUp, TrendingDown, Wallet, PieChart, Save, Check, FolderOpen } from 'lucide-react';
 import { cn } from './lib/utils';
 import { processRecurringTransactions } from './services/recurringService';
-import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile, openDatabaseFromPath, pickDatabaseFile } from './lib/fileHandling';
+import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile, openDatabaseFromPath, pickDatabaseFile, getCliArgs } from './lib/fileHandling';
 import { encryptData } from './lib/crypto';
 import { StatusBar } from './components/StatusBar';
 import { seedBlankData, seedSampleData } from './lib/seedData';
@@ -29,13 +29,51 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [addedRecurringCount, setAddedRecurringCount] = useState(0);
   const [importedCount, setImportedCount] = useState(0);
+  const [draggedFile, setDraggedFile] = useState<File | null>(null);
   const hasProcessedRef = React.useRef(false);
 
   React.useEffect(() => {
     const checkAuth = async () => {
-      const pathObj = await db.settings.get('currentFilePath');
-      if (pathObj?.value && (window as any).__TAURI_INTERNALS__) {
-        setCurrentFilePath(pathObj.value);
+      let activePath = null;
+      let loadFromCli = false;
+
+      if ((window as any).__TAURI_INTERNALS__) {
+        const args = await getCliArgs();
+        const finFile = args.find(a => a.toLowerCase().endsWith('.fin'));
+        
+        if (finFile) {
+           activePath = finFile;
+           loadFromCli = true;
+           setCurrentFilePath(activePath);
+           await db.settings.put({ key: 'currentFilePath', value: activePath, updated_at: Date.now() });
+        } else {
+           const pathObj = await db.settings.get('currentFilePath');
+           if (pathObj?.value) {
+             activePath = pathObj.value;
+             setCurrentFilePath(activePath);
+           }
+        }
+      }
+
+      if (loadFromCli && activePath) {
+        try {
+          await openDatabaseFromPath(activePath, null);
+          const hashObj = await db.settings.get('appPasswordHash');
+          if (hashObj?.value) {
+            setAuthStatus('unauthorized');
+          } else {
+            setAuthStatus('authorized');
+          }
+          return;
+        } catch (e: any) {
+          if (e.message === 'FILE_ENCRYPTED') {
+            setPendingFilePath(activePath);
+            setAuthStatus('unauthorized');
+            return;
+          }
+          console.error("Failed to open file from CLI", e);
+          alert("Failed to open file: " + e.message);
+        }
       }
 
       const hashObj = await db.settings.get('appPasswordHash');
@@ -48,16 +86,52 @@ export default function App() {
     checkAuth();
   }, []);
 
-  // Tauri shortcuts & tracking & auto-save
+  // Tauri shortcuts & tracking & auto-save & drag-drop
   React.useEffect(() => {
     if (!(window as any).__TAURI_INTERNALS__) return;
     
     let isDirty = false;
+    let unlistenDragDrop: (() => void) | undefined;
 
     const handleChange = () => {
       isDirty = true;
       setSaveStatus('unsaved');
     };
+
+    const setupDragDrop = async () => {
+      try {
+        const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        
+        unlistenDragDrop = await getCurrentWebview().onDragDropEvent(async (event) => {
+          if (event.payload.type === 'drop') {
+            const paths = event.payload.paths;
+            if (paths && paths.length > 0) {
+              const filePath = paths[0];
+              const ext = filePath.split('.').pop()?.toLowerCase();
+              if (ext === 'csv' || ext === 'xls' || ext === 'xlsx') {
+                try {
+                  const bytes = await readFile(filePath);
+                  const fileName = filePath.split(/[\\/]/).pop() || `import.${ext}`;
+                  const mimeType = ext === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                  const file = new File([bytes], fileName, { type: mimeType });
+                  
+                  setDraggedFile(file);
+                  setView('import');
+                } catch (err) {
+                  console.error("Failed to read dropped file:", err);
+                  alert("Could not read the dropped file.");
+                }
+              }
+            }
+          }
+        });
+      } catch(err) {
+        console.error("Failed to setup drag-drop:", err);
+      }
+    };
+    
+    setupDragDrop();
 
     // Attempt to hook Dexie changes for Auto-Save
     try {
@@ -93,6 +167,7 @@ export default function App() {
     }, 60000);
 
     return () => {
+      if (unlistenDragDrop) unlistenDragDrop();
       window.removeEventListener('keydown', handleKeyDown);
       clearInterval(interval);
       try {
@@ -163,7 +238,20 @@ export default function App() {
             setSessionPassword(null);
             setAuthStatus('authorized');
         } else {
-            setAuthStatus('authorized');
+            const saltObj = await db.settings.get('appPasswordSalt');
+            if (saltObj?.value && sessionPassword) {
+                const { hashPassword } = await import('./lib/crypto');
+                const hash = await hashPassword(sessionPassword, saltObj.value as string);
+                if (hash === hashObj.value) {
+                    setAuthStatus('authorized');
+                } else {
+                    setAuthStatus('unauthorized');
+                    setSessionPassword(null);
+                }
+            } else {
+                setAuthStatus('unauthorized');
+                setSessionPassword(null);
+            }
         }
       }
     } catch(err: any) {
@@ -301,11 +389,21 @@ export default function App() {
              const hashObj = await db.settings.get('appPasswordHash');
              if (!hashObj?.value) {
                  setSessionPassword(null);
+                 setPendingFilePath(null);
+                 setAuthStatus('authorized');
              } else {
+                 const saltObj = await db.settings.get('appPasswordSalt');
+                 if (saltObj?.value) {
+                     const { hashPassword } = await import('./lib/crypto');
+                     const hash = await hashPassword(pwd, saltObj.value as string);
+                     if (hash !== hashObj.value) {
+                         throw new Error('VERIFICATION_FAILED');
+                     }
+                 }
                  setSessionPassword(pwd);
+                 setPendingFilePath(null);
+                 setAuthStatus('authorized');
              }
-             setPendingFilePath(null);
-             setAuthStatus('authorized');
          } catch (e) {
              throw e; // LoginScreen will catch and display error
          }
@@ -329,9 +427,22 @@ export default function App() {
                 setSessionPassword(null);
                 setAuthStatus('authorized');
             } else {
-                // If we got here, they successfully opened and decrypted the file with the password provided
-                setSessionPassword(password);
-                setAuthStatus('authorized');
+                const saltObj = await db.settings.get('appPasswordSalt');
+                if (saltObj?.value) {
+                    const { hashPassword } = await import('./lib/crypto');
+                    const hash = await hashPassword(password, saltObj.value as string);
+                    if (hash === hashObj.value) {
+                        setSessionPassword(password);
+                        setAuthStatus('authorized');
+                    } else {
+                        setSessionPassword(null);
+                        // The file successfully imported, but incorrect password entered. Let them to login screen
+                        setAuthStatus('unauthorized');
+                    }
+                } else {
+                    setSessionPassword(null);
+                    setAuthStatus('unauthorized');
+                }
             }
           }
         } catch(err: any) {
@@ -410,6 +521,12 @@ export default function App() {
                           await db.settings.put({ key: 'currentFilePath', value: path, updated_at: Date.now() });
                           setSaveStatus('saved');
                           setShowOnboarding(false);
+                          
+                          const hashObj = await db.settings.get('appPasswordHash');
+                          if (hashObj?.value) {
+                              setAuthStatus('unauthorized');
+                              setSessionPassword(null);
+                          }
                         }
                       } catch (e: any) {
                           if (e.message === 'FILE_ENCRYPTED') {
@@ -492,12 +609,17 @@ export default function App() {
 
         {view === 'import' && (
           <ImportView 
-            onBack={() => setView('dashboard')} 
+            onBack={() => {
+              setView('dashboard');
+              setDraggedFile(null);
+            }} 
             initialAccountId={selectedAccountId}
+            initialFile={draggedFile}
             onImportComplete={(accountId, importedIds) => {
               setSelectedAccountId(accountId);
               setNewTransactionIds(importedIds);
               setImportedCount(importedIds.length);
+              setDraggedFile(null);
               setView('dashboard');
             }}
           />

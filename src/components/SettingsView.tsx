@@ -10,7 +10,7 @@ import {
   PieChart, Coins, Building, Landmark, ChevronUp, ChevronDown, ChevronRight,
   GripVertical, ShoppingBag, Utensils, Car, Heart, Coffee, 
   Smartphone, Music, Plane, Gift, GraduationCap, Shield, Hammer,
-  DollarSign, ArrowUpRight, ArrowDownLeft, AlertCircle, Lock
+  DollarSign, ArrowUpRight, ArrowDownLeft, AlertCircle, Lock, Settings
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
@@ -2066,6 +2066,8 @@ export function SettingsView({
 
   const [isConfirmingRestore, setIsConfirmingRestore] = useState(false);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+  const [assocSuccess, setAssocSuccess] = useState<string | null>(null);
+  const [assocError, setAssocError] = useState<string | null>(null);
   const [showPasswordSetup, setShowPasswordSetup] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -2695,6 +2697,65 @@ export function SettingsView({
                 </div>
               </div>
             </div>
+
+            {(window as any).__TAURI_INTERNALS__ && (
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mt-8">
+                <div className="p-8 space-y-8">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg">
+                      <Settings className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">System Integration</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Manage integration with your operating system</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-100 dark:border-slate-800 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">File Association</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">Link .fin files to open directly with OneFileFinance.</p>
+                      </div>
+                      <div>
+                        <button 
+                          onClick={async () => {
+                            try {
+                              const { invoke } = await import('@tauri-apps/api/core');
+                              const res = await invoke('register_file_association');
+                              setAssocSuccess(String(res));
+                              setTimeout(() => setAssocSuccess(null), 5000);
+                            } catch (e: any) {
+                              setAssocError(e.message || 'Failed to register file association');
+                              setTimeout(() => setAssocError(null), 5000);
+                            }
+                          }}
+                          className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors whitespace-nowrap mb-1"
+                        >
+                          Register .fin files
+                        </button>
+                      </div>
+                    </div>
+                    {assocSuccess && (
+                      <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl animate-fade-in">
+                        <p className="text-sm text-emerald-800 dark:text-emerald-400 font-medium flex items-center gap-2">
+                          <Check className="w-4 h-4" />
+                          {assocSuccess}
+                        </p>
+                      </div>
+                    )}
+                    {assocError && (
+                      <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/40 rounded-xl animate-fade-in">
+                        <p className="text-sm text-rose-800 dark:text-rose-400 font-medium flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          {assocError}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
       </div>
