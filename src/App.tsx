@@ -5,6 +5,7 @@ import { SettingsView } from './components/SettingsView';
 import { RecurringTransactionsTable } from './components/RecurringTransactionsTable';
 import { ImportView } from './components/ImportView';
 import { ReportingView } from './components/ReportingView';
+import { EnableBankingApiView } from './components/EnableBankingApiView';
 import { LoginScreen } from './components/LoginScreen';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
@@ -22,7 +23,8 @@ export default function App() {
   const [sessionPassword, setSessionPassword] = useState<string | null>(null);
 
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>();
-  const [view, setView] = useState<'dashboard' | 'settings' | 'recurring' | 'import' | 'reporting'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'settings' | 'recurring' | 'import' | 'reporting' | 'banking-sync'>('dashboard');
+  const [settingsTab, setSettingsTab] = useState<'accounts' | 'categories' | 'automation' | 'ui' | 'data' | 'banking'>('accounts');
   const [newTransactionIds, setNewTransactionIds] = useState<number[]>([]);
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [pendingFilePath, setPendingFilePath] = useState<string | null>(null);
@@ -30,9 +32,30 @@ export default function App() {
   const [addedRecurringCount, setAddedRecurringCount] = useState(0);
   const [importedCount, setImportedCount] = useState(0);
   const [draggedFile, setDraggedFile] = useState<File | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const hasProcessedRef = React.useRef(false);
 
   React.useEffect(() => {
+    // Check for OAuth redirect (if this is a child window spawned for auth)
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const error = urlParams.get('error');
+    if (code || error) {
+      const bc = new BroadcastChannel('enablebanking-auth');
+      bc.postMessage(code ? { code } : { error });
+      // Close this window (if it's the Tauri webview popup)
+      if ((window as any).__TAURI_INTERNALS__) {
+        import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+          getCurrentWindow().close();
+        }).catch(e => {
+          window.close();
+        });
+      } else {
+        window.close();
+      }
+      return;
+    }
+
     const checkAuth = async () => {
       let activePath = null;
       let loadFromCli = false;
@@ -558,6 +581,124 @@ export default function App() {
               numberFormat={numberFormat}
               accountBalance={accountBalance}
               newTransactionIds={newTransactionIds}
+              onSyncBankClick={async () => {
+                if (selectedAccountId) {
+                  const account = await db.accounts.get(selectedAccountId);
+                  if (account && account.eb_account_id) {
+                    setIsSyncing(true);
+                    try {
+                      // Attempt headless sync
+                      const { getTransactions } = await import('./services/enableBankingService');
+                      
+                      // Fetch from 90 days ago by default, or find the latest transaction date
+                      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                      const txs = await db.transactions.where('account_id').equals(selectedAccountId).sortBy('date');
+                      const validTxs = txs.filter(t => typeof t.date === 'string' && t.date.match(/^\d{4}-\d{2}-\d{2}/));
+                      const dateFrom = validTxs.length > 0 ? validTxs[validTxs.length - 1].date.substring(0, 10) : ninetyDaysAgo;
+                      
+                      let allTransactions: any[] = [];
+                      let continuationKey: string | undefined = undefined;
+                      
+                      do {
+                          const txData = await getTransactions(account.eb_account_id, dateFrom, continuationKey, sessionPassword);
+                          if (txData.transactions) {
+                              allTransactions.push(...txData.transactions);
+                          }
+                          continuationKey = txData.continuation_key;
+                      } while (continuationKey);
+                      
+                      const categoryRules = await db.category_rules.orderBy('priority').toArray();
+                      const categorize = (payee: string) => {
+                        if (!payee) return undefined;
+                        for (const rule of categoryRules) {
+                          const searchVal = rule.search_value.toLowerCase();
+                          const text = payee.toLowerCase();
+                          let matched = false;
+                          if (rule.match_type === 'exact') matched = text === searchVal;
+                          else if (rule.match_type === 'starts_with') matched = text.startsWith(searchVal);
+                          else if (rule.match_type === 'regex') {
+                            try { matched = new RegExp(rule.search_value, 'i').test(payee); } catch(e){}
+                          }
+                          else matched = text.includes(searchVal);
+                          if (matched) return rule.category_id;
+                        }
+                        return undefined;
+                      };
+                      
+                      const existingTransactions = await db.transactions.where('account_id').equals(selectedAccountId).toArray();
+                      const { differenceInDays, parseISO } = await import('date-fns');
+
+                      let syncedCount = 0;
+                      for (const t of allTransactions) {
+                        const rawAmount = parseFloat(t.transaction_amount.amount);
+                        const amount = t.credit_debit_indicator === 'CRDT' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
+                        const date = t.booking_date || t.value_date || new Date().toISOString().split('T')[0];
+                        
+                        // For outgoing (negative), the counterpart is the creditor. For incoming (positive), it's the debtor.
+                        const counterpartObj = amount < 0 ? t.creditor : t.debtor;
+                        let counterpart = counterpartObj?.name || '';
+                        if (!counterpart) {
+                          counterpart = t.creditor?.name || t.debtor?.name || '';
+                        }
+                        
+                        // EnableBanking API uses remittance_information (often an array or string)
+                        let remittance = '';
+                        if (Array.isArray(t.remittance_information)) {
+                            remittance = t.remittance_information.join(' ');
+                        } else if (typeof t.remittance_information === 'string') {
+                            remittance = t.remittance_information;
+                        }
+                        
+                        const description = [counterpart, remittance].filter(Boolean).join(' - ') || 'Unknown';
+                        
+                        const extId = t.transaction_id;
+                        
+                        let isDuplicate = false;
+                        if (extId) {
+                          isDuplicate = existingTransactions.some(tx => tx.external_id === extId);
+                        }
+                        
+                        if (!isDuplicate) {
+                          isDuplicate = existingTransactions.some(tx => {
+                            if (tx.amount !== amount) return false;
+                            
+                            const dbDesc = tx.description || '';
+                            if (dbDesc.trim().toLowerCase() !== description.trim().toLowerCase()) return false;
+                            
+                            try {
+                              const daysDiff = Math.abs(differenceInDays(parseISO(tx.date), parseISO(date)));
+                              return daysDiff <= 3;
+                            } catch (e) {
+                              return false;
+                            }
+                          });
+                        }
+
+                        if (!isDuplicate) {
+                          await db.transactions.add({
+                            account_id: selectedAccountId,
+                            date: date,
+                            description: description,
+                            category_id: categorize(description),
+                            amount: amount,
+                            updated_at: Date.now(),
+                            external_id: extId
+                          });
+                          syncedCount++;
+                        }
+                      }
+                      alert(`Sync Complete: ${syncedCount} new transactions imported!`);
+                      setIsSyncing(false);
+                      return; // Success, don't show the view
+                    } catch (err) {
+                      console.error("Headless sync failed", err);
+                      setIsSyncing(false);
+                      // Fallback to Auth Flow
+                    }
+                  }
+                }
+                setView('banking-sync');
+              }}
             />
           </div>
         )}
@@ -602,6 +743,7 @@ export default function App() {
                 onSave={handleSave}
                 onSaveAs={handleSaveAs}
                 onClearData={handleClearData}
+                initialTab={settingsTab}
               />
             </div>
           </div>
@@ -628,6 +770,29 @@ export default function App() {
         {view === 'reporting' && (
           <div className="flex-1 overflow-y-auto">
             <ReportingView />
+          </div>
+        )}
+        {view === 'banking-sync' && (
+          <EnableBankingApiView 
+            accountId={selectedAccountId}
+            onBack={() => setView('dashboard')} 
+            onGoToSettings={() => {
+              setSettingsTab('banking');
+              setView('settings');
+            }}
+            sessionPassword={sessionPassword} 
+          />
+        )}
+
+        {isSyncing && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl p-8 flex flex-col items-center max-w-sm w-full mx-4 animate-in fade-in zoom-in duration-200">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2 text-center">Syncing Bank...</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-center text-sm">
+                Fetching latest transactions securely in the background. Please wait.
+              </p>
+            </div>
           </div>
         )}
       </main>

@@ -3,11 +3,33 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "bank-auth"
   ],
   "permissions": [
     "core:default",
     "fs:default",
-    "dialog:default"
+    "dialog:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://*.enablebanking.com/*"
+        },
+        {
+          "url": "https://api.enablebanking.com/*"
+        }
+      ]
+    },
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-create",
+    "core:window:allow-close",
+    "shell:default",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        "^https://enablebanking\\.com"
+      ]
+    }
   ]
 }

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Transaction, type Account, type Category } from '../db';
 import { format, parseISO, isValid, parse } from 'date-fns';
-import { Check, X, Plus, Trash2, Search, Filter, ArrowUpDown, ChevronDown, AlertCircle, Tag, Repeat } from 'lucide-react';
+import { Check, X, Plus, Trash2, Search, Filter, ArrowUpDown, ChevronDown, AlertCircle, Tag, Repeat, Landmark } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ICON_MAP } from '../constants';
 
@@ -15,6 +15,7 @@ interface TransactionTableProps {
   numberFormat: string;
   accountBalance: number;
   newTransactionIds?: number[];
+  onSyncBankClick?: () => void;
 }
 
 interface TypeAheadSelectProps {
@@ -240,7 +241,7 @@ export function TypeAheadSelect({ options, value, onChange, onKeyDown, onFocus, 
 }
 
 export function DateInput({ value, onChange, onKeyDown, onFocus, onBlur, autoFocus, className }: { 
-  value: string; 
+  value?: string; 
   onChange: (val: string) => void; 
   onKeyDown: (e: React.KeyboardEvent) => void;
   onFocus?: () => void;
@@ -249,7 +250,7 @@ export function DateInput({ value, onChange, onKeyDown, onFocus, onBlur, autoFoc
   className?: string;
   key?: string;
 }) {
-  const formatToDisplay = (val: string) => isValid(parseISO(val)) ? format(parseISO(val), 'dd.MM.yyyy') : val;
+  const formatToDisplay = (val?: string) => (val && isValid(parseISO(val))) ? format(parseISO(val), 'dd.MM.yyyy') : (val || '');
   const [inputValue, setInputValue] = useState(() => formatToDisplay(value));
 
   useEffect(() => {
@@ -509,7 +510,7 @@ const TransactionRow = React.memo(({
         ) : (
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-600 dark:text-slate-400">
-              {isValid(parseISO(optimisticT.date)) ? format(parseISO(optimisticT.date), 'dd.MM.yyyy') : optimisticT.date}
+              {optimisticT.date && isValid(parseISO(optimisticT.date)) ? format(parseISO(optimisticT.date), 'dd.MM.yyyy') : (optimisticT.date || '')}
             </span>
             {optimisticT.external_id?.startsWith('recurring_') && (
               <Repeat className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Created by recurring transaction" />
@@ -679,7 +680,7 @@ const TransactionRow = React.memo(({
   );
 });
 
-export function TransactionTable({ accountId, homeCurrency, numberFormat, accountBalance, newTransactionIds }: TransactionTableProps) {
+export function TransactionTable({ accountId, homeCurrency, numberFormat, accountBalance, newTransactionIds, onSyncBankClick }: TransactionTableProps) {
   const transactions = useLiveQuery(
     () => {
       let query = db.transactions.orderBy('date').reverse();
@@ -742,7 +743,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
 
   const filteredTransactions = transactions?.filter(t => {
     if (showUncategorizedOnly && t.category_id) return false;
-    const descMatch = t.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const descMatch = (t.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     const categoryName = categories?.find(c => c.id === t.category_id)?.name || '';
     const categoryMatch = categoryName.toLowerCase().includes(searchQuery.toLowerCase());
     return descMatch || categoryMatch;
@@ -1189,6 +1190,20 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                 </span>
               </div>
 
+              {/* Sync Button */}
+              <div className="w-40 flex items-center justify-center px-4">
+                {accountId && (
+                  <button
+                    onClick={onSyncBankClick}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 rounded-lg transition-colors border border-blue-100 dark:border-blue-800/50"
+                    title="Sync with your Bank"
+                  >
+                    <Landmark className="w-4 h-4" />
+                    Sync Bank
+                  </button>
+                )}
+              </div>
+
               {/* Aligned with Category column (w-56) */}
               <div className="w-56 flex flex-col items-start px-4">
                 {uncategorizedCount > 0 && (
@@ -1262,7 +1277,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                   />
                 ) : (
                   <span className="text-sm text-slate-500 dark:text-slate-400">
-                    {isValid(parseISO(newTransaction.date)) ? format(parseISO(newTransaction.date), 'dd.MM.yyyy') : 'Select Date'}
+                    {newTransaction.date && isValid(parseISO(newTransaction.date)) ? format(parseISO(newTransaction.date), 'dd.MM.yyyy') : 'Select Date'}
                   </span>
                 )}
               </td>

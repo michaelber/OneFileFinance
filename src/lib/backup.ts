@@ -3,7 +3,7 @@ import { importInto } from 'dexie-export-import';
 
 export async function generateExportData() {
   const allSettings = await db.settings.toArray();
-  const allowedSettingsKeys = ['accentColor', 'topBarColor', 'homeCurrency', 'darkMode', 'compactView', 'numberFormat', 'appPasswordHash', 'appPasswordSalt', 'fileEncryptionEnabled'];
+  const allowedSettingsKeys = ['accentColor', 'topBarColor', 'homeCurrency', 'darkMode', 'compactView', 'numberFormat', 'appPasswordHash', 'appPasswordSalt', 'fileEncryptionEnabled', 'enableBanking_appId', 'enableBanking_privateKey'];
   const allowedSettingsOnly = allSettings.filter(s => allowedSettingsKeys.includes(s.key));
 
   const data: any = {
@@ -80,7 +80,7 @@ export async function processImportData(text: string) {
     if (data.settings && Array.isArray(data.settings)) {
       for (const s of data.settings) {
         // Only accept explicitly allowed settings (UI and security flags)
-        const allowedSettingsKeys = ['accentColor', 'topBarColor', 'homeCurrency', 'darkMode', 'compactView', 'numberFormat', 'appPasswordHash', 'appPasswordSalt', 'fileEncryptionEnabled'];
+        const allowedSettingsKeys = ['accentColor', 'topBarColor', 'homeCurrency', 'darkMode', 'compactView', 'numberFormat', 'appPasswordHash', 'appPasswordSalt', 'fileEncryptionEnabled', 'enableBanking_appId', 'enableBanking_privateKey'];
         if (allowedSettingsKeys.includes(s.key)) {
            await db.settings.put({ key: s.key, value: s.value, updated_at: Date.now() });
         }

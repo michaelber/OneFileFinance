@@ -1989,16 +1989,22 @@ export function SettingsView({
   onOpen, 
   onSave, 
   onSaveAs,
-  onClearData 
+  onClearData,
+  initialTab = 'accounts'
 }: { 
   currentFilePath?: string | null, 
   sessionPassword?: string | null,
   onOpen?: () => void, 
   onSave?: () => void, 
   onSaveAs?: () => void,
-  onClearData?: () => void 
+  onClearData?: () => void,
+  initialTab?: 'accounts' | 'categories' | 'automation' | 'ui' | 'data' | 'banking'
 } = {}) {
-  const [activeTab, setActiveTab] = useState<'accounts' | 'categories' | 'automation' | 'ui' | 'data'>('accounts');
+  const [activeTab, setActiveTab] = useState<'accounts' | 'categories' | 'automation' | 'ui' | 'data' | 'banking'>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const accountTypes = useLiveQuery(() => db.account_types.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.toArray());
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -2182,6 +2188,7 @@ export function SettingsView({
           { id: 'automation', label: 'Automation', icon: Zap },
           { id: 'ui', label: 'UI / Display', icon: Eye },
           { id: 'data', label: 'Data Management', icon: Download },
+          { id: 'banking', label: 'Banking API', icon: Landmark },
         ].map(tab => (
           <button
             key={tab.id}
@@ -2758,7 +2765,183 @@ export function SettingsView({
             )}
           </section>
         )}
+
+        {activeTab === 'banking' && (
+          <BankingSettingsSection sessionPassword={sessionPassword} />
+        )}
       </div>
     </div>
+  );
+}
+
+function BankingSettingsSection({ sessionPassword }: { sessionPassword?: string | null }) {
+  const settings = useLiveQuery(() => db.settings.toArray());
+  const appId = settings?.find(s => s.key === 'enableBanking_appId')?.value || '';
+  const hasPrivateKey = !!settings?.find(s => s.key === 'enableBanking_privateKey')?.value;
+  
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePickKey = async () => {
+    try {
+      if (!(window as any).__TAURI_INTERNALS__) {
+        setError('This feature requires the desktop app.');
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const { readTextFile } = await import('@tauri-apps/plugin-fs');
+      
+      const path = await open({
+        multiple: false,
+        filters: [{
+          name: 'Private Key',
+          extensions: ['pem']
+        }]
+      });
+      
+      if (!path || typeof path !== 'string') {
+        setLoading(false);
+        return;
+      }
+      
+      const keyContent = await readTextFile(path);
+      
+      let finalKeyContent = keyContent;
+      // Encrypt the private key before storing if a session password is provided
+      if (sessionPassword) {
+         finalKeyContent = await encryptData(keyContent, sessionPassword);
+      }
+      
+      await db.settings.put({ key: 'enableBanking_privateKey', value: finalKeyContent, updated_at: Date.now() });
+      
+      // Auto-fill App ID from filename if not already set or if user wants to overwrite
+      const filename = path.split(/[/\\]/).pop();
+      if (filename && filename.endsWith('.pem')) {
+        const potentialAppId = filename.substring(0, filename.length - 4);
+        if (!appId) {
+          await db.settings.put({ key: 'enableBanking_appId', value: potentialAppId, updated_at: Date.now() });
+        }
+      }
+      
+      setSuccess('Private key successfully loaded and securely stored.');
+    } catch (e: any) {
+      setError(e.message || 'Failed to read the private key file.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveCredentials = async () => {
+    await db.settings.delete('enableBanking_appId');
+    await db.settings.delete('enableBanking_privateKey');
+    setSuccess('Banking credentials removed.');
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  return (
+    <section className="animate-fade-in max-w-2xl">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg">
+            <Landmark className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">EnableBanking Integration</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Configure your banking API credentials</p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+            <p>
+              To synchronize your accounts, you must provide your EnableBanking Application ID and your RSA Private Key (.pem file). 
+            </p>
+            <ul className="list-disc pl-5 space-y-1 mt-2">
+              <li>
+                Create an account at <button 
+                  onClick={async () => {
+                    const { open } = await import('@tauri-apps/plugin-shell');
+                    open('https://enablebanking.com');
+                  }}
+                  className="text-blue-500 hover:underline bg-transparent border-none p-0 cursor-pointer"
+                >enablebanking.com</button>.
+              </li>
+              <li>Click <strong>"Add a new application"</strong> and ensure you create it in the <strong>Production</strong> environment.</li>
+              <li>Set the <strong>Allowed redirect URL</strong> strictly to: <code className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">http://tauri.localhost</code></li>
+              <li>Download your <code className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">.pem</code> private key file. The Application ID will be automatically inferred from the file name.</li>
+            </ul>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Application ID
+              </label>
+              <input
+                type="text"
+                value={appId}
+                onChange={(e) => db.settings.put({ key: 'enableBanking_appId', value: e.target.value, updated_at: Date.now() })}
+                placeholder="Enter Application ID"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-accent/20 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Private Key (.pem)
+              </label>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handlePickKey}
+                  disabled={loading}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {loading ? 'Reading...' : 'Select .pem File'}
+                </button>
+                {hasPrivateKey && (
+                  <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                    <Check className="w-4 h-4" /> Key stored securely
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {(appId || hasPrivateKey) && (
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={handleRemoveCredentials}
+                className="text-sm text-rose-600 hover:text-rose-700 font-medium"
+              >
+                Remove Credentials
+              </button>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/40 rounded-xl">
+              <p className="text-sm text-rose-800 dark:text-rose-400 font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                {error}
+              </p>
+            </div>
+          )}
+
+          {success && (
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl">
+              <p className="text-sm text-emerald-800 dark:text-emerald-400 font-medium flex items-center gap-2">
+                <Check className="w-4 h-4" />
+                {success}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

@@ -9,6 +9,7 @@ OneFileFinance is a fast, local-first personal finance management application. I
 ## Features
 
 *   **100% Private & Local-First Architecture:** Your financial data is stored locally in your browser using IndexedDB (via Dexie.js) or saved locally as a `.fin` file. Data never leaves your device unless you choose to export it.
+*   **Automated Bank Syncing:** Connect securely to over 3,000+ European banks via the EnableBanking API. Authenticate once and sync your transactions directly into your local database in the background.
 *   **Advanced Reports:** Gain actionable insights with visually stunning P&L reports, comprehensive cashflow analysis, and net worth tracking.
 *   **Excel-like Editing:** Easily add, modify, delete, and search transactions with a beautiful, agile data grid designed for power users.
 *   **Deep Customization:** Setup arbitrary rules for auto-categorization. Design specific accounts, categories, and handle Opening Balances seamlessly.

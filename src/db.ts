@@ -28,6 +28,7 @@ export interface Account {
   show_in_top_bar: boolean;
   account_type_id: number;
   order?: number;
+  eb_account_id?: string;
   updated_at: number;
 }
 
