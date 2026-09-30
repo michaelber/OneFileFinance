@@ -5,7 +5,7 @@ import { SettingsView } from './components/SettingsView';
 import { RecurringTransactionsTable } from './components/RecurringTransactionsTable';
 import { ImportView } from './components/ImportView';
 import { ReportingView } from './components/ReportingView';
-import { EnableBankingApiView } from './components/EnableBankingApiView';
+import { EnableBankingSetup } from './components/EnableBankingSetup';
 import { LoginScreen } from './components/LoginScreen';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
@@ -774,7 +774,7 @@ export default function App() {
           </div>
         )}
         {view === 'banking-sync' && (
-          <EnableBankingApiView 
+          <EnableBankingSetup 
             accountId={selectedAccountId}
             onBack={() => setView('dashboard')} 
             onGoToSettings={() => {
