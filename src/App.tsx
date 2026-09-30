@@ -610,25 +610,17 @@ export default function App() {
                       const categoryRules = await db.category_rules.orderBy('priority').toArray();
                       const categorize = (payee: string) => {
                         if (!payee) return undefined;
-                        for (const rule of categoryRules) {
-                          const searchVal = rule.search_value.toLowerCase();
-                          const text = payee.toLowerCase();
-                          let matched = false;
-                          if (rule.match_type === 'exact') matched = text === searchVal;
-                          else if (rule.match_type === 'starts_with') matched = text.startsWith(searchVal);
-                          else if (rule.match_type === 'regex') {
-                            try { matched = new RegExp(rule.search_value, 'i').test(payee); } catch(e){}
-                          }
-                          else matched = text.includes(searchVal);
-                          if (matched) return rule.category_id;
-                        }
-                        return undefined;
+                        const match = categoryRules.find(r => payee.toLowerCase().includes(r.search_value.toLowerCase()));
+                        return match ? match.category_id : undefined;
                       };
                       
                       const existingTransactions = await db.transactions.where('account_id').equals(selectedAccountId).toArray();
                       const { differenceInDays, parseISO } = await import('date-fns');
 
                       let syncedCount = 0;
+                      let importedIds: number[] = [];
+                      const validTxsToInsert: any[] = [];
+                      
                       for (const t of allTransactions) {
                         const rawAmount = parseFloat(t.transaction_amount.amount);
                         const amount = t.credit_debit_indicator === 'CRDT' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
@@ -651,7 +643,7 @@ export default function App() {
                         
                         const description = [counterpart, remittance].filter(Boolean).join(' - ') || 'Unknown';
                         
-                        const extId = t.transaction_id;
+                        const extId = t.transaction_id || t.entry_reference;
                         
                         let isDuplicate = false;
                         if (extId) {
@@ -675,7 +667,7 @@ export default function App() {
                         }
 
                         if (!isDuplicate) {
-                          await db.transactions.add({
+                          validTxsToInsert.push({
                             account_id: selectedAccountId,
                             date: date,
                             description: description,
@@ -684,10 +676,19 @@ export default function App() {
                             updated_at: Date.now(),
                             external_id: extId
                           });
-                          syncedCount++;
                         }
                       }
-                      alert(`Sync Complete: ${syncedCount} new transactions imported!`);
+                      
+                      await db.transaction('rw', db.transactions, async () => {
+                          for (const tx of validTxsToInsert) {
+                              const id = await db.transactions.add(tx);
+                              importedIds.push(id as number);
+                          }
+                      });
+                      syncedCount = importedIds.length;
+                      
+                      setNewTransactionIds(importedIds);
+                      setImportedCount(syncedCount);
                       setIsSyncing(false);
                       return; // Success, don't show the view
                     } catch (err) {
@@ -781,6 +782,12 @@ export default function App() {
               setView('settings');
             }}
             sessionPassword={sessionPassword} 
+            onImportComplete={(accId, importedIds) => {
+              if (accId) setSelectedAccountId(accId);
+              setNewTransactionIds(importedIds);
+              setImportedCount(importedIds.length);
+              setView('dashboard');
+            }}
           />
         )}
 

@@ -51,13 +51,17 @@ OneFileFinance can be run as a standard web application or compiled into a nativ
 
 ### Desktop Application (Tauri)
 
-To build the standalone desktop executable (e.g., `.exe` for Windows):
+To run or build the standalone desktop executable (e.g., `.exe` for Windows):
 
 1. Install project dependencies:
    ```bash
    npm install
    ```
-2. Build the Tauri app (this automatically builds the Vite frontend inside `docs/dist` first):
+2. Start the Tauri development window (fastest for desktop debugging):
+   ```bash
+   npm run tauri dev
+   ```
+3. Build the Tauri app for release (this automatically builds the Vite frontend inside `docs/dist` first):
    ```bash
    npm run tauri build
    ```

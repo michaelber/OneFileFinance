@@ -26,3 +26,8 @@ tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-http = "~2.7.0"
 tauri-plugin-shell = "2.4.0"
+
+[profile.release]
+lto = false
+codegen-units = 256
+opt-level = 3

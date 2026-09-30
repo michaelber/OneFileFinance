@@ -17,6 +17,7 @@ import { cn } from '../lib/utils';
 import { hashPassword, generateSaltHex, encryptData, decryptData } from '../lib/crypto';
 import { generateExportData, processImportData } from '../lib/backup';
 import { saveDatabaseToFile } from '../lib/fileHandling';
+import { EnableBankingDebugPanel } from './EnableBankingDebugPanel';
 
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
   const [isConfirming, setIsConfirming] = useState(false);
@@ -2939,6 +2940,10 @@ function BankingSettingsSection({ sessionPassword }: { sessionPassword?: string 
                 {success}
               </p>
             </div>
+          )}
+
+          {appId && hasPrivateKey && (
+            <EnableBankingDebugPanel sessionPassword={sessionPassword} />
           )}
         </div>
       </div>
