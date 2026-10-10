@@ -81,7 +81,11 @@ export async function fetchWithAuth(
 
   if (!response.ok) {
     const text = await response.text().catch(() => 'No response body');
-    throw new Error(`EnableBanking API Error ${response.status}: ${text}`);
+    let extraContext = '';
+    if (response.status === 401 && text.includes('CLOSED_SESSION')) {
+      extraContext = ' (The bank authorization session has expired or was revoked. Please reconnect your bank account.)';
+    }
+    throw new Error(`EnableBanking API Error ${response.status}: ${text}${extraContext}`);
   }
 
   return response.json();
@@ -115,7 +119,8 @@ export async function startAuthFlow(
 ): Promise<{ url: string }> {
   // We generate a random UUID for the state
   const state = crypto.randomUUID();
-  const valid_until = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days
+  // Under PSD2 RTS amendments, consent validity can be requested for up to 180 days
+  const valid_until = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(); // 180 days
   
   const body = {
     access: { valid_until },

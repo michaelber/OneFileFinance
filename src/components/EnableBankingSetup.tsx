@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getASPSPs, startAuthFlow, syncBankTransactions, type ASPSP } from '../services/enableBankingService';
-import { Landmark, ArrowLeft, Loader2, AlertCircle, Check, Search, ChevronDown } from 'lucide-react';
-import { db } from '../db';
+import { Landmark, ArrowLeft, Loader2, AlertCircle, Check, Search, ChevronDown, RefreshCw } from 'lucide-react';
+import { db, type Account } from '../db';
 
 interface EnableBankingSetupProps {
   onBack: () => void;
@@ -15,10 +15,32 @@ export function EnableBankingSetup({ onBack, onGoToSettings, sessionPassword, ac
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  const [account, setAccount] = useState<Account | null>(null);
+  const [isReauth, setIsReauth] = useState(false);
+  const [showBankPicker, setShowBankPicker] = useState(false);
+
   const [selectedAspsp, setSelectedAspsp] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    async function loadAccount() {
+      if (accountId) {
+        const acc = await db.accounts.get(accountId);
+        if (acc) {
+          setAccount(acc);
+          if (acc.eb_account_id) {
+            setIsReauth(true);
+          }
+          if (acc.eb_aspsp_name) {
+            setSelectedAspsp(acc.eb_aspsp_name);
+          }
+        }
+      }
+    }
+    loadAccount();
+  }, [accountId]);
   
   const groupedASPSPs = useMemo(() => {
     const filtered = aspsps.filter(a => 
@@ -62,6 +84,24 @@ export function EnableBankingSetup({ onBack, onGoToSettings, sessionPassword, ac
     }
     loadASPSPs();
   }, [sessionPassword]);
+
+  // If the bank is not explicitly saved on account, try to auto-match using account name
+  useEffect(() => {
+    if (account && !selectedAspsp && aspsps.length > 0) {
+      if (account.eb_aspsp_name) {
+        setSelectedAspsp(account.eb_aspsp_name);
+      } else if (account.eb_account_id) {
+        const accName = account.name.trim().toLowerCase();
+        const matched = aspsps.find(a => {
+          const bankName = a.name.trim().toLowerCase();
+          return accName.includes(bankName) || bankName.includes(accName);
+        });
+        if (matched) {
+          setSelectedAspsp(matched.name);
+        }
+      }
+    }
+  }, [account, aspsps, selectedAspsp]);
 
   const handleStartAuth = async () => {
     if (!selectedAspsp) return;
@@ -115,14 +155,19 @@ export function EnableBankingSetup({ onBack, onGoToSettings, sessionPassword, ac
             if (accountId && bankAccounts.length > 0) {
               const ba = bankAccounts[0];
 
-              // Link the account in DB
-              await db.accounts.update(accountId, { eb_account_id: ba.uid });
+              // Link the account in DB and remember the bank for future re-authentications
+              await db.accounts.update(accountId, { 
+                eb_account_id: ba.uid,
+                eb_aspsp_name: aspsp.name,
+                eb_aspsp_country: aspsp.country,
+                updated_at: Date.now()
+              });
 
-              // Determine date range: start from latest existing tx or 90 days ago
-              const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+              // Determine date range: start from latest existing tx or 180 days ago
+              const maxDaysAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
               const txs = await db.transactions.where('account_id').equals(accountId).sortBy('date');
               const validTxs = txs.filter(t => typeof t.date === 'string' && t.date.match(/^\d{4}-\d{2}-\d{2}/));
-              const dateFrom = validTxs.length > 0 ? validTxs[validTxs.length - 1].date.substring(0, 10) : ninetyDaysAgo;
+              const dateFrom = validTxs.length > 0 ? validTxs[validTxs.length - 1].date.substring(0, 10) : maxDaysAgo;
 
               importedIds = await syncBankTransactions(accountId, ba.uid, dateFrom, sessionPassword);
             }
@@ -156,8 +201,14 @@ export function EnableBankingSetup({ onBack, onGoToSettings, sessionPassword, ac
             <Landmark className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Connect Bank Account</h2>
-            <p className="text-slate-500 dark:text-slate-400">Securely link your bank to import transactions.</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+              {isReauth ? 'Re-authenticate Bank Account' : 'Connect Bank Account'}
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400">
+              {isReauth
+                ? `Renew bank authorization for ${account?.name || 'this account'}.`
+                : 'Securely link your bank to import transactions.'}
+            </p>
           </div>
         </div>
         <button 
@@ -189,80 +240,146 @@ export function EnableBankingSetup({ onBack, onGoToSettings, sessionPassword, ac
           </div>
         ) : (
           <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Select your Bank
-              </label>
-              <div className="relative" ref={dropdownRef}>
-                <div 
-                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium cursor-pointer"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                >
-                  <span className={selectedAspsp ? "text-slate-900 dark:text-white" : "text-slate-500"}>
-                    {selectedAspsp ? aspsps.find(a => a.name === selectedAspsp)?.name || selectedAspsp : "-- Select a Bank --"}
-                  </span>
-                  <ChevronDown className="w-4 h-4 text-slate-400" />
+            {isReauth && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl flex items-start gap-3">
+                <RefreshCw className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <h4 className="font-semibold text-amber-900 dark:text-amber-200">Re-authentication Required</h4>
+                  <p className="text-amber-700 dark:text-amber-300 mt-0.5">
+                    Your banking session for <strong>{account?.name || 'this account'}</strong> has expired. European banking regulations (PSD2) require renewing your authorization periodically to continue syncing transactions securely.
+                  </p>
                 </div>
-                
-                {isDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden flex flex-col max-h-[400px]">
-                    <div className="p-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input
-                          autoFocus
-                          type="text"
-                          placeholder="Search banks by name or country..."
-                          value={searchTerm}
-                          onChange={e => setSearchTerm(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white"
-                        />
+              </div>
+            )}
+
+            {isReauth && selectedAspsp && !showBankPicker ? (
+              <div className="space-y-6">
+                <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                        <Landmark className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Linked Bank</div>
+                        <div className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          {selectedAspsp}
+                          {aspsps.find(a => a.name === selectedAspsp)?.country && (
+                            <span className="text-xs font-normal text-slate-500 dark:text-slate-400 uppercase px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">
+                              {aspsps.find(a => a.name === selectedAspsp)?.country}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="overflow-y-auto flex-1 p-2 space-y-4">
-                      {groupedASPSPs.length === 0 ? (
-                        <div className="p-4 text-center text-sm text-slate-500">No banks found.</div>
-                      ) : (
-                        groupedASPSPs.map(group => (
-                          <div key={group.country} className="space-y-1">
-                            <div className="px-3 py-1.5 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider sticky top-0 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm z-10 rounded">
-                              {group.country}
-                            </div>
-                            {group.banks.map(bank => (
-                              <div
-                                key={`${bank.name}-${bank.country}`}
-                                onClick={() => {
-                                  setSelectedAspsp(bank.name);
-                                  setIsDropdownOpen(false);
-                                  setSearchTerm('');
-                                }}
-                                className={`px-4 py-2.5 text-sm cursor-pointer rounded-lg flex items-center justify-between transition-colors ${
-                                  selectedAspsp === bank.name 
-                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium' 
-                                    : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300'
-                                }`}
-                              >
-                                {bank.name}
-                                {selectedAspsp === bank.name && <Check className="w-4 h-4" />}
-                              </div>
-                            ))}
-                          </div>
-                        ))
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowBankPicker(true)}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                    >
+                      Change Bank
+                    </button>
                   </div>
-                )}
+                </div>
+
+                <button
+                  onClick={handleStartAuth}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 shadow-sm"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+                  Re-authenticate with {selectedAspsp}
+                </button>
               </div>
-            </div>
-            
-            <button
-              onClick={handleStartAuth}
-              disabled={!selectedAspsp || loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
-            >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Landmark className="w-5 h-5" />}
-              Connect {selectedAspsp || 'Bank'}
-            </button>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      Select your Bank
+                    </label>
+                    {isReauth && selectedAspsp && (
+                      <button
+                        type="button"
+                        onClick={() => setShowBankPicker(false)}
+                        className="text-xs text-slate-500 dark:text-slate-400 hover:underline"
+                      >
+                        Cancel (keep {selectedAspsp})
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative" ref={dropdownRef}>
+                    <div 
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium cursor-pointer"
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    >
+                      <span className={selectedAspsp ? "text-slate-900 dark:text-white" : "text-slate-500"}>
+                        {selectedAspsp ? aspsps.find(a => a.name === selectedAspsp)?.name || selectedAspsp : "-- Select a Bank --"}
+                      </span>
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    </div>
+                    
+                    {isDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden flex flex-col max-h-[400px]">
+                        <div className="p-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Search banks by name or country..."
+                              value={searchTerm}
+                              onChange={e => setSearchTerm(e.target.value)}
+                              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                        <div className="overflow-y-auto flex-1 p-2 space-y-4">
+                          {groupedASPSPs.length === 0 ? (
+                            <div className="p-4 text-center text-sm text-slate-500">No banks found.</div>
+                          ) : (
+                            groupedASPSPs.map(group => (
+                              <div key={group.country} className="space-y-1">
+                                <div className="px-3 py-1.5 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider sticky top-0 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm z-10 rounded">
+                                  {group.country}
+                                </div>
+                                {group.banks.map(bank => (
+                                  <div
+                                    key={`${bank.name}-${bank.country}`}
+                                    onClick={() => {
+                                      setSelectedAspsp(bank.name);
+                                      setIsDropdownOpen(false);
+                                      setSearchTerm('');
+                                    }}
+                                    className={`px-4 py-2.5 text-sm cursor-pointer rounded-lg flex items-center justify-between transition-colors ${
+                                      selectedAspsp === bank.name 
+                                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium' 
+                                        : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300'
+                                    }`}
+                                  >
+                                    {bank.name}
+                                    {selectedAspsp === bank.name && <Check className="w-4 h-4" />}
+                                  </div>
+                                ))}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <button
+                  onClick={handleStartAuth}
+                  disabled={!selectedAspsp || loading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Landmark className="w-5 h-5" />}
+                  {isReauth ? `Re-authenticate with ${selectedAspsp || 'Bank'}` : `Connect ${selectedAspsp || 'Bank'}`}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

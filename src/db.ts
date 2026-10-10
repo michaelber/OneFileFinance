@@ -29,6 +29,8 @@ export interface Account {
   account_type_id: number;
   order?: number;
   eb_account_id?: string;
+  eb_aspsp_name?: string;
+  eb_aspsp_country?: string;
   updated_at: number;
 }
 
