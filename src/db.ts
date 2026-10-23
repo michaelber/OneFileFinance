@@ -78,8 +78,8 @@ export class OneFileFinanceDB extends Dexie {
 
   constructor() {
     super('OneFileFinanceDB');
-    this.version(7).stores({
-      transactions: '++id, description, date, account_id, category_id, &external_id, updated_at',
+    this.version(8).stores({
+      transactions: '++id, description, date, account_id, category_id, external_id, updated_at',
       accounts: '++id, name, account_type_id, is_archived, show_in_top_bar, order, updated_at',
       categories: '++id, name, updated_at',
       category_rules: '++id, search_value, category_id, priority, updated_at',

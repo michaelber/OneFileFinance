@@ -647,7 +647,7 @@ export default function App() {
                         
                         let isDuplicate = false;
                         if (extId) {
-                          isDuplicate = existingTransactions.some(tx => tx.external_id === extId);
+                          isDuplicate = existingTransactions.some(tx => tx.external_id === extId && tx.amount === amount);
                         }
                         
                         if (!isDuplicate) {
@@ -664,6 +664,11 @@ export default function App() {
                               return false;
                             }
                           });
+                        }
+
+                        // Also check against other transactions already queued in this batch
+                        if (!isDuplicate && extId) {
+                          isDuplicate = validTxsToInsert.some(tx => tx.external_id === extId && tx.amount === amount);
                         }
 
                         if (!isDuplicate) {

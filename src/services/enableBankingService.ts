@@ -235,7 +235,7 @@ export async function analyzeBankTransactions(
     let duplicateReason: string | undefined;
 
     if (extId) {
-      const match = existingTransactions.find(tx => tx.external_id === extId);
+      const match = existingTransactions.find(tx => tx.external_id === extId && tx.amount === amount);
       if (match) {
         isDuplicate = true;
         duplicateReason = `external_id match (db id=${match.id})`;
@@ -255,6 +255,15 @@ export async function analyzeBankTransactions(
       if (match) {
         isDuplicate = true;
         duplicateReason = `fuzzy match (db id=${match.id})`;
+      }
+    }
+
+    // Also check against other transactions already queued in this batch
+    if (!isDuplicate && extId) {
+      const batchMatch = results.find(r => r.status === 'WOULD_INSERT' && r.mapped.external_id === extId && r.mapped.amount === amount);
+      if (batchMatch) {
+        isDuplicate = true;
+        duplicateReason = `duplicate external_id within same batch`;
       }
     }
 
