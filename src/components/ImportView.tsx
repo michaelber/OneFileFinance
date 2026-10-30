@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { parse, isValid, format, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
 import { parseAmount, formatAmount } from '../lib/formatters';
+import { categorizeDescription } from '../lib/categorization';
 
 interface ImportViewProps {
   onBack: () => void;
@@ -334,8 +335,7 @@ export function ImportView({ onBack, initialAccountId, initialFile, onImportComp
       }
       
       if (!categoryId && categoryRules) {
-        const match = categoryRules.find(r => descStr.toLowerCase().includes(r.search_value.toLowerCase()));
-        if (match) categoryId = match.category_id;
+        categoryId = categorizeDescription(descStr, categoryRules);
       }
 
       const parsedTx: Partial<Transaction> = {

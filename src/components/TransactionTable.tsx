@@ -8,6 +8,7 @@ import { cn } from '../lib/utils';
 import { ICON_MAP } from '../constants';
 
 import { formatAmount, getDecimalSeparator, parseAmount } from '../lib/formatters';
+import { categorizeDescription } from '../lib/categorization';
 
 interface TransactionTableProps {
   accountId?: number;
@@ -885,12 +886,9 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
     };
 
     if (field === 'description') {
-      const rules = await db.category_rules.orderBy('priority').toArray();
-      for (const rule of rules) {
-        if (String(value).toLowerCase().includes(rule.search_value.toLowerCase())) {
-          updates.category_id = rule.category_id;
-          break;
-        }
+      const catId = categorizeDescription(String(value), categoryRules);
+      if (catId) {
+        updates.category_id = catId;
       }
     }
 
@@ -929,10 +927,9 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
 
   const applyAutoCategorization = async (description: string) => {
     if (!description || newTransaction.category_id) return;
-    const rules = await db.category_rules.orderBy('priority').toArray();
-    const match = rules.find(r => description.toLowerCase().includes(r.search_value.toLowerCase()));
-    if (match) {
-      setNewTransaction(prev => ({ ...prev, category_id: match.category_id }));
+    const catId = categorizeDescription(description, categoryRules);
+    if (catId) {
+      setNewTransaction(prev => ({ ...prev, category_id: catId }));
     }
   };
 
@@ -1298,12 +1295,7 @@ export function TransactionTable({ accountId, homeCurrency, numberFormat, accoun
                     onChange={(val) => {
                       let category_id = newTransactionRef.current.category_id;
                       if (!category_id && val) {
-                        for (const rule of categoryRules) {
-                          if (val.toLowerCase().includes(rule.search_value.toLowerCase())) {
-                            category_id = rule.category_id;
-                            break;
-                          }
-                        }
+                        category_id = categorizeDescription(val, categoryRules);
                       }
                       handleNewTransactionChange({ description: val, category_id });
                     }}

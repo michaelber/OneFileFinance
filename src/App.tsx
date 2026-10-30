@@ -12,6 +12,7 @@ import { db } from './db';
 import { format } from 'date-fns';
 import { TrendingUp, TrendingDown, Wallet, PieChart, Save, Check, FolderOpen } from 'lucide-react';
 import { cn } from './lib/utils';
+import { categorizeDescription } from './lib/categorization';
 import { processRecurringTransactions } from './services/recurringService';
 import { saveDatabaseToFile, promptSaveAsDatabase, openDatabaseFromFile, openDatabaseFromPath, pickDatabaseFile, getCliArgs } from './lib/fileHandling';
 import { encryptData } from './lib/crypto';
@@ -608,11 +609,7 @@ export default function App() {
                       } while (continuationKey);
                       
                       const categoryRules = await db.category_rules.orderBy('priority').toArray();
-                      const categorize = (payee: string) => {
-                        if (!payee) return undefined;
-                        const match = categoryRules.find(r => payee.toLowerCase().includes(r.search_value.toLowerCase()));
-                        return match ? match.category_id : undefined;
-                      };
+                      const categorize = (payee: string) => categorizeDescription(payee, categoryRules);
                       
                       const existingTransactions = await db.transactions.where('account_id').equals(selectedAccountId).toArray();
                       const { differenceInDays, parseISO } = await import('date-fns');

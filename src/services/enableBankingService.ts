@@ -2,6 +2,7 @@ import * as jose from 'jose';
 import { db } from '../db';
 import { decryptData } from '../lib/crypto';
 import { differenceInDays, parseISO } from 'date-fns';
+import { categorizeDescription } from '../lib/categorization';
 
 export const API_ORIGIN = "https://api.enablebanking.com";
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
@@ -207,11 +208,7 @@ export async function analyzeBankTransactions(
     : await db.transactions.toArray();
   const categoryRules = await db.category_rules.orderBy('priority').toArray();
 
-  const categorize = (desc: string): number | undefined => {
-    if (!desc) return undefined;
-    const match = categoryRules.find(r => desc.toLowerCase().includes(r.search_value.toLowerCase()));
-    return match ? match.category_id : undefined;
-  };
+  const categorize = (desc: string): number | undefined => categorizeDescription(desc, categoryRules);
 
   const results: AnalyzedTransaction[] = [];
 

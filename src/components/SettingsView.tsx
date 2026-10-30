@@ -17,6 +17,7 @@ import { cn } from '../lib/utils';
 import { hashPassword, generateSaltHex, encryptData, decryptData } from '../lib/crypto';
 import { generateExportData, processImportData } from '../lib/backup';
 import { saveDatabaseToFile } from '../lib/fileHandling';
+import { categorizeDescription } from '../lib/categorization';
 import { EnableBankingDebugPanel } from './EnableBankingDebugPanel';
 
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
@@ -1457,15 +1458,13 @@ function CategoryRuleTable() {
       let appliedCount = 0;
       await db.transaction('rw', db.transactions, async () => {
         for (const transaction of uncategorized) {
-          for (const rule of allRules) {
-            if (transaction.description.toLowerCase().includes(rule.search_value.toLowerCase())) {
-              await db.transactions.update(transaction.id!, {
-                category_id: rule.category_id,
-                updated_at: Date.now()
-              });
-              appliedCount++;
-              break;
-            }
+          const categoryId = categorizeDescription(transaction.description, allRules);
+          if (categoryId) {
+            await db.transactions.update(transaction.id!, {
+              category_id: categoryId,
+              updated_at: Date.now()
+            });
+            appliedCount++;
           }
         }
       });
