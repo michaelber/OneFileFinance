@@ -16,10 +16,10 @@ export async function getEnableBankingCredentials(sessionPassword?: string | nul
 
   let privateKey = privateKeyObj.value;
   if (privateKey.startsWith('OFF_ENC::')) {
-      if (!sessionPassword) {
-          throw new Error('App is locked or password not provided to decrypt private key');
-      }
-      privateKey = await decryptData(privateKey, sessionPassword);
+    if (!sessionPassword) {
+      throw new Error('App is locked or password not provided to decrypt private key');
+    }
+    privateKey = await decryptData(privateKey, sessionPassword);
   }
 
   return {
@@ -50,17 +50,17 @@ export async function generateEnableBankingJWT(sessionPassword?: string | null):
 }
 
 export async function fetchWithAuth(
-  endpoint: string, 
-  options: RequestInit = {}, 
+  endpoint: string,
+  options: RequestInit = {},
   sessionPassword?: string | null
 ) {
   const jwt = await generateEnableBankingJWT(sessionPassword);
-  
+
   const headers = new Headers(options.headers || {});
   headers.set('Authorization', `Bearer ${jwt}`);
-  
+
   if (!headers.has('Content-Type') && options.method && options.method !== 'GET') {
-      headers.set('Content-Type', 'application/json');
+    headers.set('Content-Type', 'application/json');
   }
 
   const plainHeaders: Record<string, string> = {};
@@ -96,6 +96,7 @@ export interface ASPSP {
   country: string;
   id?: string;
   logo?: string;
+  maximum_consent_validity?: number; // max consent validity in seconds, reported by the ASPSP
 }
 
 export interface ApplicationDetails {
@@ -112,16 +113,19 @@ export async function getASPSPs(sessionPassword?: string | null): Promise<{ asps
 }
 
 export async function startAuthFlow(
-  aspspName: string, 
-  aspspCountry: string, 
-  redirectUrl: string, 
-  sessionPassword?: string | null
+  aspspName: string,
+  aspspCountry: string,
+  redirectUrl: string,
+  sessionPassword?: string | null,
+  maxConsentValidity?: number // max consent validity in seconds, from ASPSP metadata
 ): Promise<{ url: string }> {
   // We generate a random UUID for the state
   const state = crypto.randomUUID();
-  // Under PSD2 RTS amendments, consent validity can be requested for up to 180 days
-  const valid_until = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(); // 180 days
-  
+  // Use the bank's reported maximum, or fall back to 90 days (safe PSD2 baseline)
+  const DEFAULT_VALIDITY_SECONDS = 90 * 24 * 60 * 60; // 90 days in seconds
+  const validitySeconds = maxConsentValidity ?? DEFAULT_VALIDITY_SECONDS;
+  const valid_until = new Date(Date.now() + validitySeconds * 1000).toISOString();
+
   const body = {
     access: { valid_until },
     aspsp: { name: aspspName, country: aspspCountry },
@@ -149,21 +153,21 @@ export async function getAccounts(sessionPassword?: string | null): Promise<any>
 }
 
 export async function getTransactions(
-  accountId: string, 
-  dateFrom: string, 
-  continuationKey?: string, 
+  accountId: string,
+  dateFrom: string,
+  continuationKey?: string,
   sessionPassword?: string | null
 ): Promise<{ transactions: any[], continuation_key?: string }> {
   let url = `/accounts/${accountId}/transactions?date_from=${encodeURIComponent(dateFrom)}`;
   if (continuationKey) {
     url += `&continuation_key=${encodeURIComponent(continuationKey)}`;
   }
-  
+
   const headers = {
     'psu-ip-address': '127.0.0.1', // Local app
     'psu-user-agent': navigator.userAgent || 'OneFileFinance',
   };
-  
+
   return fetchWithAuth(url, { headers }, sessionPassword);
 }
 

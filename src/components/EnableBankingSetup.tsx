@@ -120,7 +120,7 @@ export function EnableBankingSetup({ onBack, onGoToSettings, sessionPassword, ac
         throw new Error('No redirect URL configured in EnableBanking portal');
       }
 
-      const { url } = await startAuthFlow(aspsp.name, aspsp.country, redirectUrl, sessionPassword);
+      const { url } = await startAuthFlow(aspsp.name, aspsp.country, redirectUrl, sessionPassword, aspsp.maximum_consent_validity);
       
       if (!(window as any).__TAURI_INTERNALS__) {
         window.open(url, '_blank', 'width=800,height=800');
@@ -147,10 +147,15 @@ export function EnableBankingSetup({ onBack, onGoToSettings, sessionPassword, ac
           
           if (code) {
             const sessionData = await createSession(code, sessionPassword);
-            console.log('Session created!', sessionData);
             
             const bankAccounts = sessionData.accounts || [];
             let importedIds: number[] = [];
+
+            if (bankAccounts.length === 0) {
+              setError('No linked accounts returned by the bank. Please make sure you have linked at least one account in the EnableBanking portal (enablebanking.com) before connecting.');
+              setLoading(false);
+              return;
+            }
 
             if (accountId && bankAccounts.length > 0) {
               const ba = bankAccounts[0];
